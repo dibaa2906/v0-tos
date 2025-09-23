@@ -2,17 +2,34 @@
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Users, Settings, BarChart3, FileText, LogOut, ChevronLeft, ChevronRight } from "lucide-react"
+import { LayoutDashboard, Users, Settings, BarChart3, FileText, LogOut, ChevronLeft, ChevronRight, DollarSign, ChevronDown, Plus, List } from "lucide-react"
 import { logout } from "@/lib/auth"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
+import Link from "next/link"
+import { useState } from "react"
 
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
 }
 
-const menuItems = [
+interface MenuItem {
+  icon: any
+  label: string
+  href?: string
+  submenu?: { icon: any; label: string; href: string }[]
+}
+
+const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { 
+    icon: DollarSign, 
+    label: "Budget", 
+    submenu: [
+      { icon: Plus, label: "Add Budget", href: "/budget/add" },
+      { icon: List, label: "Budget List", href: "/budget/list" }
+    ]
+  },
   { icon: Users, label: "Users", href: "/dashboard/users" },
   { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },
   { icon: FileText, label: "Reports", href: "/dashboard/reports" },
@@ -21,11 +38,23 @@ const menuItems = [
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([])
 
   const handleLogout = () => {
     logout()
     router.push("/")
   }
+
+  const toggleSubmenu = (label: string) => {
+    setExpandedMenus(prev => 
+      prev.includes(label) 
+        ? prev.filter(item => item !== label)
+        : [...prev, label]
+    )
+  }
+
+  const isSubmenuExpanded = (label: string) => expandedMenus.includes(label)
 
   return (
     <div
@@ -57,19 +86,77 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 p-2">
-          {menuItems.map((item) => (
-            <Button
-              key={item.href}
-              variant="ghost"
-              className={cn(
-                "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                collapsed ? "px-2" : "px-3",
-              )}
-            >
-              <item.icon className={cn("h-5 w-5", collapsed ? "" : "mr-3")} />
-              {!collapsed && <span>{item.label}</span>}
-            </Button>
-          ))}
+          {menuItems.map((item) => {
+            if (item.submenu) {
+              const isExpanded = isSubmenuExpanded(item.label)
+              const hasActiveSubmenu = item.submenu.some(sub => pathname === sub.href)
+              
+              return (
+                <div key={item.label}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => !collapsed && toggleSubmenu(item.label)}
+                    className={cn(
+                      "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      collapsed ? "px-2" : "px-3",
+                      hasActiveSubmenu && "bg-sidebar-accent text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <item.icon className={cn("h-5 w-5", collapsed ? "" : "mr-3")} />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left">{item.label}</span>
+                        <ChevronDown className={cn(
+                          "h-4 w-4 transition-transform",
+                          isExpanded && "rotate-180"
+                        )} />
+                      </>
+                    )}
+                  </Button>
+                  
+                  {!collapsed && isExpanded && (
+                    <div className="ml-6 mt-1 space-y-1">
+                      {item.submenu.map((subItem) => {
+                        const isActive = pathname === subItem.href
+                        return (
+                          <Link key={subItem.href} href={subItem.href}>
+                            <Button
+                              variant="ghost"
+                              className={cn(
+                                "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sm",
+                                "px-3",
+                                isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                              )}
+                            >
+                              <subItem.icon className="h-4 w-4 mr-3" />
+                              <span>{subItem.label}</span>
+                            </Button>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            } else {
+              const isActive = pathname === item.href
+              return (
+                <Link key={item.href} href={item.href!}>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      collapsed ? "px-2" : "px-3",
+                      isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <item.icon className={cn("h-5 w-5", collapsed ? "" : "mr-3")} />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Button>
+                </Link>
+              )
+            }
+          })}
         </nav>
 
         {/* Footer */}
