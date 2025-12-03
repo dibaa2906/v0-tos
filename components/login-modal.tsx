@@ -17,10 +17,10 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground">
               <div className="h-4 w-4 rounded-sm bg-background"></div>
             </div>
-            <span className="text-xl font-semibold text-foreground">Enterprise</span>
+            <span className="text-xl font-semibold text-foreground">Langkawi Port Sdn Bhd</span>
           </div>
           <DialogTitle className="text-2xl">Welcome back</DialogTitle>
-          <DialogDescription>Sign in to access your enterprise dashboard</DialogDescription>
+          <DialogDescription>Sign in to access your intern portal</DialogDescription>
         </DialogHeader>
         <LoginForm />
       </DialogContent>
