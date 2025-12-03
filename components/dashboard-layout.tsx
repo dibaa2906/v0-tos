@@ -11,14 +11,14 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex">
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-64"}`}>
-        <Header onMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <main className="p-6">{children}</main>
+      <div className="flex-1 flex flex-col transition-all duration-300">
+        <Header />
+        <main className="flex-1 p-6 bg-gray-50">{children}</main>
       </div>
     </div>
   )

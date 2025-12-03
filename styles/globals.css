@@ -123,3 +123,113 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Enhanced Button Visibility Styles */
+@layer components {
+  /* Header buttons - make them highly visible */
+  header button,
+  header [data-slot="button"] {
+    background-color: #14b8a6 !important;
+    color: white !important;
+    border: 2px solid #14b8a6 !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  header button:hover,
+  header [data-slot="button"]:hover {
+    background-color: #0d9488 !important;
+    border-color: #0d9488 !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+    transform: translateY(-1px) !important;
+  }
+
+  /* Outline variant in header */
+  header button[class*="outline"],
+  header [data-slot="button"][class*="outline"] {
+    background-color: white !important;
+    color: #0d9488 !important;
+    border-color: #14b8a6 !important;
+  }
+
+  header button[class*="outline"]:hover,
+  header [data-slot="button"][class*="outline"]:hover {
+    background-color: #ccfbf1 !important;
+    border-color: #0d9488 !important;
+    color: #0d9488 !important;
+  }
+
+  /* Hero section buttons - large and prominent */
+  section:first-of-type button,
+  section:first-of-type [data-slot="button"] {
+    background-color: #14b8a6 !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 700 !important;
+    font-size: 1.125rem !important;
+    padding: 0.875rem 2.5rem !important;
+    height: 3.5rem !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    transition: all 0.3s ease !important;
+  }
+
+  section:first-of-type button:hover,
+  section:first-of-type [data-slot="button"]:hover {
+    background-color: #0d9488 !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+    transform: scale(1.05) translateY(-2px) !important;
+  }
+
+  /* Outline buttons in hero */
+  section:first-of-type button[class*="outline"],
+  section:first-of-type [data-slot="button"][class*="outline"] {
+    background-color: white !important;
+    color: #1f2937 !important;
+    border: 2px solid #6b7280 !important;
+  }
+
+  section:first-of-type button[class*="outline"]:hover,
+  section:first-of-type [data-slot="button"][class*="outline"]:hover {
+    background-color: #ccfbf1 !important;
+    border-color: #14b8a6 !important;
+    color: #0d9488 !important;
+  }
+
+  /* CTA section buttons - high contrast on gradient */
+  section:has([class*="bg-gradient-to-r"]) button,
+  section:has([class*="bg-gradient-to-r"]) [data-slot="button"] {
+    font-weight: 700 !important;
+    font-size: 1.125rem !important;
+    padding: 0.875rem 2.5rem !important;
+    height: 3.5rem !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    transition: all 0.3s ease !important;
+  }
+
+  section:has([class*="bg-gradient-to-r"]) button:not([class*="outline"]),
+  section:has([class*="bg-gradient-to-r"]) [data-slot="button"]:not([class*="outline"]) {
+    background-color: white !important;
+    color: #0d9488 !important;
+    border: none !important;
+  }
+
+  section:has([class*="bg-gradient-to-r"]) button:not([class*="outline"]):hover,
+  section:has([class*="bg-gradient-to-r"]) [data-slot="button"]:not([class*="outline"]):hover {
+    background-color: #f9fafb !important;
+    transform: scale(1.05) translateY(-2px) !important;
+  }
+
+  section:has([class*="bg-gradient-to-r"]) button[class*="outline"],
+  section:has([class*="bg-gradient-to-r"]) [data-slot="button"][class*="outline"] {
+    background-color: transparent !important;
+    color: white !important;
+    border: 2px solid white !important;
+  }
+
+  section:has([class*="bg-gradient-to-r"]) button[class*="outline"]:hover,
+  section:has([class*="bg-gradient-to-r"]) [data-slot="button"][class*="outline"]:hover {
+    background-color: rgba(255, 255, 255, 0.3) !important;
+    transform: scale(1.05) translateY(-2px) !important;
+  }
+}

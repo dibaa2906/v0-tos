@@ -1,3 +1,5 @@
+"use client"
+
 import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { DashboardContent } from "@/components/dashboard-content"

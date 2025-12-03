@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Login</title>
+    <style>
+        body { font-family: Arial; padding: 20px; max-width: 600px; margin: 0 auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Intern Attendance System - Test</h1>
+    
+    <h2>Quick Links:</h2>
+    <p><a href="http://localhost:3000/login" target="_blank">Login Page</a></p>
+    <p><a href="http://localhost:3000/signup" target="_blank">Sign Up Page</a></p>
+    
+    <h2>Test Credentials:</h2>
+    <ul>
+        <li><strong>Username:</strong> testintern</li>
+        <li><strong>Password:</strong> password123</li>
+    </ul>
+    
+    <h2>API Test:</h2>
+    <button onclick="testLogin()">Test Login API</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testLogin() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: 'testintern',
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = '<div class="success">✅ Login API Works!<br><pre>' + JSON.stringify(data, null, 2) + '</pre></div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ Error: ' + data.error + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Connection Error: ' + error.message + '</div>';
+            }
+        }
+    </script>
+</body>
+</html>
+
+
