@@ -1,13 +1,19 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 
-const dbPath = path.join(process.cwd(), 'data', 'attendance.db')
+// Use Railway's data directory or fallback to local data directory
+const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'attendance.db')
 
 // Ensure data directory exists
 const fs = require('fs')
 const dataDir = path.dirname(dbPath)
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true })
+try {
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true })
+  }
+} catch (error) {
+  console.warn('Could not create data directory:', error)
+  // Continue anyway - might be in read-only filesystem
 }
 
 const db = new Database(dbPath, {
