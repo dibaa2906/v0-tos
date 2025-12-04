@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "node server.js",
+    "start": "next start",
     "db:init": "tsx scripts/init-database.ts",
     "db:status": "tsx scripts/check-database.ts",
     "pm2:start": "pm2 start ecosystem.config.js",
