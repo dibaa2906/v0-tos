@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Bell, X, Check, CheckCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,10 +29,12 @@ export function Notifications({ variant = 'admin' }: NotificationsProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0, maxHeight: 600 })
+  const [mounted, setMounted] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
+    setMounted(true)
     getCurrentUser().then(setCurrentUser)
   }, [])
 
@@ -135,24 +138,62 @@ export function Notifications({ variant = 'admin' }: NotificationsProps) {
   }
 
   const handleToggle = () => {
-    if (!isOpen && buttonRef.current) {
+    if (!isOpen && buttonRef.current && typeof window !== 'undefined') {
       const rect = buttonRef.current.getBoundingClientRect()
+      const dropdownWidth = 384 // w-96 = 384px
+      const dropdownHeight = 600 // max-h-[600px]
+      const padding = 16 // padding from edges
+      
+      // Calculate position
+      let top = rect.bottom + 8
+      let right = window.innerWidth - rect.right
+      let maxHeight = dropdownHeight
+      
+      // Check if dropdown would go off bottom of screen
+      if (top + dropdownHeight > window.innerHeight - padding) {
+        // Position above button instead
+        top = rect.top - dropdownHeight - 8
+        // Ensure it doesn't go off top
+        if (top < padding) {
+          top = padding
+          // Adjust max height to fit available space
+          maxHeight = window.innerHeight - top - padding
+        } else {
+          // Adjust max height to fit available space
+          maxHeight = Math.min(dropdownHeight, window.innerHeight - top - padding)
+        }
+      } else {
+        // Adjust max height to fit available space below
+        maxHeight = Math.min(dropdownHeight, window.innerHeight - top - padding)
+      }
+      
+      // Check if dropdown would go off right edge
+      if (right + dropdownWidth > window.innerWidth - padding) {
+        right = padding
+      }
+      
+      // Check if dropdown would go off left edge
+      if (right < padding) {
+        right = padding
+      }
+      
       setDropdownPosition({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right
+        top: Math.max(padding, top),
+        right: Math.max(padding, right),
+        maxHeight: Math.max(200, maxHeight) // Minimum height of 200px
       })
     }
     setIsOpen(!isOpen)
   }
 
   return (
-    <div className="relative z-[9999]">
+    <div className="relative">
       <Button
         ref={buttonRef}
         variant="ghost"
         size="sm"
         onClick={handleToggle}
-        className="relative"
+        className="relative z-10"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
@@ -162,19 +203,27 @@ export function Notifications({ variant = 'admin' }: NotificationsProps) {
         )}
       </Button>
 
-      {isOpen && (
+      {isOpen && mounted && typeof window !== 'undefined' && createPortal(
         <>
           <div 
-            className="fixed inset-0 z-[9998]" 
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)' }}
+            className="fixed inset-0" 
+            style={{ 
+              backgroundColor: 'rgba(0, 0, 0, 0.3)',
+              zIndex: 99999,
+              position: 'fixed'
+            }}
             onClick={() => setIsOpen(false)}
           />
           <Card 
-            className="fixed w-96 max-h-[600px] overflow-hidden z-[9999] shadow-lg border-[#40e0d0]/30"
+            className="fixed w-96 overflow-hidden shadow-2xl border-[#40e0d0]/30"
             style={{ 
               backgroundColor: '#ffffff',
               top: `${dropdownPosition.top}px`,
-              right: `${dropdownPosition.right}px`
+              right: `${dropdownPosition.right}px`,
+              maxHeight: `${dropdownPosition.maxHeight}px`,
+              position: 'fixed',
+              zIndex: 100000,
+              isolation: 'isolate'
             }}
           >
             <CardHeader 
@@ -220,14 +269,15 @@ export function Notifications({ variant = 'admin' }: NotificationsProps) {
                     <p>No notifications</p>
                   </div>
                 ) : (
-                  <div className="divide-y" style={{ backgroundColor: '#ffffff' }}>
+                  <div className="divide-y divide-gray-200">
                     {notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                          !notification.isRead ? 'bg-blue-50' : 'bg-white'
+                        className={`p-4 transition-colors cursor-pointer ${
+                          !notification.isRead 
+                            ? 'bg-gray-200 hover:bg-gray-300' 
+                            : 'bg-gray-50 hover:bg-gray-100'
                         }`}
-                        style={{ backgroundColor: !notification.isRead ? '#eff6ff' : '#ffffff' }}
                         onClick={() => !notification.isRead && markAsRead(notification.id)}
                       >
                         <div className="flex items-start gap-3">
@@ -237,18 +287,30 @@ export function Notifications({ variant = 'admin' }: NotificationsProps) {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1">
-                                <p className={`font-semibold text-sm ${!notification.isRead ? 'text-gray-900' : 'text-gray-700'}`}>
+                                <p className={`font-semibold text-sm ${
+                                  !notification.isRead 
+                                    ? 'text-gray-900 font-bold' 
+                                    : 'text-gray-600'
+                                }`}>
                                   {notification.title}
                                 </p>
-                                <p className="text-sm text-gray-600 mt-1">
+                                <p className={`text-sm mt-1 ${
+                                  !notification.isRead 
+                                    ? 'text-gray-700' 
+                                    : 'text-gray-500'
+                                }`}>
                                   {notification.message}
                                 </p>
-                                <p className="text-xs text-gray-400 mt-2">
+                                <p className={`text-xs mt-2 ${
+                                  !notification.isRead 
+                                    ? 'text-gray-600' 
+                                    : 'text-gray-400'
+                                }`}>
                                   {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                                 </p>
                               </div>
                               {!notification.isRead && (
-                                <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1" />
+                                <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1" />
                               )}
                             </div>
                           </div>
@@ -260,7 +322,8 @@ export function Notifications({ variant = 'admin' }: NotificationsProps) {
               </div>
             </CardContent>
           </Card>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )

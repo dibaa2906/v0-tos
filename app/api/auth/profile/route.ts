@@ -14,6 +14,9 @@ export async function PUT(request: NextRequest) {
       emergencyContactName, 
       emergencyContactPhone,
       phoneNumber,
+      institution,
+      lecturerContactName,
+      lecturerContactPhone,
       password,
       isAdmin
     } = body
@@ -49,9 +52,27 @@ export async function PUT(request: NextRequest) {
       payload.address = address
       payload.emergencyContactName = emergencyContactName
       payload.emergencyContactPhone = emergencyContactPhone
+      // Add institution and lecturer fields for interns
+      if (institution !== undefined) payload.institution = institution
+      if (lecturerContactName !== undefined) payload.lecturerContactName = lecturerContactName
+      if (lecturerContactPhone !== undefined) payload.lecturerContactPhone = lecturerContactPhone
+    }
+
+    // Allow phoneNumber update for interns too
+    if (phoneNumber !== undefined && !isAdmin) {
+      payload.phoneNumber = phoneNumber
     }
 
     if (password) {
+      // Validate password strength
+      if (password.length < 8) {
+        return NextResponse.json({ error: 'Password must be at least 8 characters long' }, { status: 400 })
+      }
+      const hasLetter = /[a-zA-Z]/.test(password)
+      const hasNumber = /[0-9]/.test(password)
+      if (!hasLetter || !hasNumber) {
+        return NextResponse.json({ error: 'Password must include both letters and numbers' }, { status: 400 })
+      }
       payload.password = password
     }
 

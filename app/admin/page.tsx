@@ -39,6 +39,25 @@ export default function AdminOverviewPage() {
   const currentMonth = new Date().toISOString().slice(0, 7)
 
   useEffect(() => {
+    // Check for logout flag - prevent forward navigation after logout
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const logoutFlag = sessionStorage.getItem('logoutFlag')
+        if (logoutFlag === 'true') {
+          sessionStorage.removeItem('logoutFlag')
+          router.replace('/login')
+          return
+        }
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+
+    // Replace history to prevent forward navigation
+    window.history.replaceState(null, '', window.location.href)
+  }, [router])
+
+  useEffect(() => {
     fetchDashboardData()
   }, [])
 
@@ -57,6 +76,7 @@ export default function AdminOverviewPage() {
     try {
       const [internsRes, leavesRes, reportsRes] = await Promise.all([
         fetch('/api/auth/interns').catch(() => ({ json: () => ({ interns: [] }) })),
+        // Fetch ALL pending leaves (no department filter for company overview)
         fetch('/api/leaves?status=pending').catch(() => ({ json: () => ({ leaves: [] }) })),
         fetch(`/api/reports?month=${currentMonth}`).catch(() => ({ json: () => ({ reports: [], totals: {} }) }))
       ])
@@ -174,7 +194,10 @@ export default function AdminOverviewPage() {
                   <p className="text-sm text-gray-500 mt-1">{myActiveInterns.length} active today</p>
                 </CardContent>
               </Card>
-              <Card className="border-[#20b2aa]/40">
+              <Card 
+                className="border-[#20b2aa]/40 hover:shadow-md transition cursor-pointer" 
+                onClick={() => router.push('/admin/leaves?view=mydept')}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Pending Leaves (My Dept)</CardTitle>
                 </CardHeader>
@@ -227,7 +250,7 @@ export default function AdminOverviewPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-[#40e0d0]/30 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/admin/leaves')}>
+            <Card className="border-[#40e0d0]/30 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/admin/leaves?view=all')}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium text-gray-600">Pending Leaves</CardTitle>
@@ -418,6 +441,20 @@ export default function AdminOverviewPage() {
 
                 {activeTab === 'leaves' && (
                   <div className="overflow-x-auto">
+                    <div className="flex items-center justify-between p-4 border-b">
+                      <p className="text-sm text-gray-600">
+                        Showing all {pendingLeaves.length} pending leave applications
+                      </p>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => router.push('/admin/leaves')}
+                        className="text-[#20b2aa] hover:text-[#1a9b94]"
+                      >
+                        View All Leaves
+                        <ArrowRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
                     <table className="w-full">
                       <thead className="bg-[#20b2aa]/5">
                         <tr>
@@ -428,7 +465,7 @@ export default function AdminOverviewPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {pendingLeaves.slice(0, 8).map(leave => (
+                        {pendingLeaves.map(leave => (
                           <tr 
                             key={leave.id} 
                             className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
@@ -449,7 +486,7 @@ export default function AdminOverviewPage() {
                         {pendingLeaves.length === 0 && (
                           <tr>
                             <td colSpan={4} className="p-6 text-center text-sm text-gray-500">
-                              No recent leave activity.
+                              No pending leave applications.
                             </td>
                           </tr>
                         )}

@@ -107,6 +107,19 @@ export function getVolumeLogsByUser(userId: string) {
   return db.prepare('SELECT * FROM volume_logs WHERE userId = ? ORDER BY date DESC').all(userId) as any[]
 }
 
+export function getAllVolumeLogs() {
+  return db.prepare(`
+    SELECT 
+      vl.*,
+      u.fullName,
+      u.email,
+      u.department
+    FROM volume_logs vl
+    JOIN users u ON vl.userId = u.id
+    ORDER BY vl.date DESC
+  `).all() as any[]
+}
+
 export function createVolumeLog(log: any) {
   // First verify the user exists
   const user = getUserById(log.userId)
@@ -157,4 +170,13 @@ export function updateLeaveApplication(id: string, updates: Partial<any>) {
   const values = Object.values(updates)
   const stmt = db.prepare(`UPDATE leave_applications SET ${fields} WHERE id = ?`)
   return stmt.run(...values, id)
+}
+
+export function deleteLeaveApplication(id: string) {
+  console.log('🗑️ deleteLeaveApplication called with ID:', id)
+  // Use parameterized query to ensure exact ID match
+  const stmt = db.prepare('DELETE FROM leave_applications WHERE id = ?')
+  const result = stmt.run(id)
+  console.log('🗑️ Delete result:', { changes: result.changes, lastInsertRowid: result.lastInsertRowid })
+  return result
 }

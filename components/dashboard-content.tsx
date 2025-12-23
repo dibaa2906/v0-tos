@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { getTodayAttendance, getAttendanceRecords } from "@/lib/attendance"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
+import { markLegitimateNavigation } from "@/lib/navigation-guard"
 
 export function DashboardContent() {
   const [user, setUser] = useState<any>(null)
@@ -142,7 +143,7 @@ export function DashboardContent() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <Card 
               className="cursor-pointer hover:shadow-md transition-shadow aspect-square"
-              onClick={() => router.push('/dashboard/attendance')}
+              onClick={() => { markLegitimateNavigation(); router.push('/dashboard/attendance') }}
             >
               <CardContent className="flex flex-col items-center justify-center p-6 h-full">
                 <Clock className="h-8 w-8 mb-2 text-primary" />
@@ -152,7 +153,7 @@ export function DashboardContent() {
             
             <Card 
               className="cursor-pointer hover:shadow-md transition-shadow aspect-square"
-              onClick={() => router.push('/dashboard/logs')}
+              onClick={() => { markLegitimateNavigation(); router.push('/dashboard/logs') }}
             >
               <CardContent className="flex flex-col items-center justify-center p-6 h-full">
                 <FileText className="h-8 w-8 mb-2 text-primary" />
@@ -162,7 +163,7 @@ export function DashboardContent() {
             
             <Card 
               className="cursor-pointer hover:shadow-md transition-shadow aspect-square"
-              onClick={() => router.push('/dashboard/leave')}
+              onClick={() => { markLegitimateNavigation(); router.push('/dashboard/leave') }}
             >
               <CardContent className="flex flex-col items-center justify-center p-6 h-full">
                 <Calendar className="h-8 w-8 mb-2 text-primary" />
@@ -172,7 +173,7 @@ export function DashboardContent() {
             
             <Card 
               className="cursor-pointer hover:shadow-md transition-shadow aspect-square"
-              onClick={() => router.push('/dashboard/history')}
+              onClick={() => { markLegitimateNavigation(); router.push('/dashboard/history') }}
             >
               <CardContent className="flex flex-col items-center justify-center p-6 h-full">
                 <History className="h-8 w-8 mb-2 text-primary" />
@@ -182,7 +183,7 @@ export function DashboardContent() {
             
             <Card 
               className="cursor-pointer hover:shadow-md transition-shadow aspect-square"
-              onClick={() => router.push('/dashboard/profile')}
+              onClick={() => { markLegitimateNavigation(); router.push('/dashboard/profile') }}
             >
               <CardContent className="flex flex-col items-center justify-center p-6 h-full">
                 <User className="h-8 w-8 mb-2 text-primary" />

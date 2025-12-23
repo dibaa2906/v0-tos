@@ -1,18 +1,21 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Calendar, FileText, Send, Clock, CheckCircle2, XCircle, Printer, Download, Upload, X, Eye } from "lucide-react"
+import { Calendar, FileText, Send, Clock, CheckCircle2, XCircle, Printer, Download, Upload, X, Eye, Trash2, RefreshCw } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { exportTableToPDF, exportTableToCSV } from '@/lib/pdf-export'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { checkDirectAccess } from "@/lib/navigation-guard"
 
 export default function LeavePage() {
+  const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -26,9 +29,46 @@ export default function LeavePage() {
   })
   const [mcPreview, setMcPreview] = useState<string | null>(null)
   const [viewMcDialog, setViewMcDialog] = useState<{ open: boolean; mcFile: string | null; fileName?: string }>({ open: false, mcFile: null })
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; leaveId: string | null }>({ open: false, leaveId: null })
+  const [deleting, setDeleting] = useState(false)
   const myLeavesRef = useRef<HTMLDivElement>(null)
+  const isSubmittingRef = useRef<boolean>(false)
 
   useEffect(() => {
+    // Check if this is a legitimate login redirect (has auth params)
+    const urlParams = new URLSearchParams(window.location.search)
+    const isLoginRedirect = urlParams.get('auth') === 'true' && urlParams.get('userId')
+    
+    // Only check for direct access if this is NOT a login redirect
+    if (!isLoginRedirect) {
+      try {
+        if (checkDirectAccess()) {
+          console.log('[LeavePage] Direct access detected, redirecting to login')
+          router.replace('/login')
+          return
+        }
+      } catch (error) {
+        console.error('[LeavePage] Error checking direct access:', error)
+      }
+    }
+
+    // Check for logout flag - prevent forward navigation after logout
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const logoutFlag = sessionStorage.getItem('logoutFlag')
+        if (logoutFlag === 'true') {
+          sessionStorage.removeItem('logoutFlag')
+          router.replace('/login')
+          return
+        }
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+
+    // Replace history to prevent forward navigation
+    window.history.replaceState(null, '', window.location.href)
+
     const fetchData = async () => {
       const currentUser = await getCurrentUser()
       if (currentUser) {
@@ -38,6 +78,17 @@ export default function LeavePage() {
       setLoading(false)
     }
     fetchData()
+    
+    // Set up automatic refresh every 10 seconds to check for leave status updates
+    const refreshInterval = setInterval(async () => {
+      const currentUser = await getCurrentUser()
+      if (currentUser) {
+        fetchLeaves(currentUser.id)
+      }
+    }, 10000) // Refresh every 10 seconds
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(refreshInterval)
   }, [])
 
   const fetchLeaves = async (userId: string) => {
@@ -45,7 +96,32 @@ export default function LeavePage() {
       const res = await fetch(`/api/leaves?userId=${userId}`)
       const data = await res.json()
       if (data.success && data.leaves) {
-        setLeaves(data.leaves || [])
+        // Deduplicate leaves by ID to prevent duplicate keys
+        const uniqueLeaves = data.leaves.reduce((acc: any[], leave: any) => {
+          const existing = acc.find(l => l.id === leave.id)
+          if (!existing) {
+            acc.push(leave)
+          } else {
+            console.warn('⚠️ Duplicate leave found, keeping first:', leave.id)
+          }
+          return acc
+        }, [])
+        console.log('📋 Fetched leaves:', { total: data.leaves.length, unique: uniqueLeaves.length })
+        
+        // Debug: Log approved_hod leaves to verify data structure
+        const approvedLeaves = uniqueLeaves.filter((l: any) => l.status === 'approved_hod')
+        if (approvedLeaves.length > 0) {
+          console.log('✅ Approved HOD leaves found:', approvedLeaves.map((l: any) => ({
+            id: l.id,
+            status: l.status,
+            supervisorApprovedAt: l.supervisorApprovedAt,
+            hodApprovedAt: l.hodApprovedAt,
+            supervisorRejectedAt: l.supervisorRejectedAt,
+            rejectedAt: l.rejectedAt
+          })))
+        }
+        
+        setLeaves(uniqueLeaves)
       }
     } catch (error) {
       console.error('Error fetching leaves:', error)
@@ -83,13 +159,28 @@ export default function LeavePage() {
   const getStatusSteps = (leave: any) => {
     // Determine which stage we're at
     const isPending = leave.status === 'pending'
-    const isSupervisorApproved = leave.status === 'supervisor_approved' || leave.supervisorApprovedAt
-    const isHODApproved = leave.status === 'approved_hod'
+    
+    // Supervisor is approved if: 
+    // - status is supervisor_approved OR 
+    // - supervisorApprovedAt is set OR 
+    // - status is approved_hod (HOD auto-completed both stages for Pentadbiran)
+    const isSupervisorApproved = leave.status === 'supervisor_approved' || 
+                                 !!leave.supervisorApprovedAt || 
+                                 leave.status === 'approved_hod'
+    
+    // HOD is approved if: 
+    // - status is approved_hod OR 
+    // - hodApprovedAt is set
+    const isHODApproved = leave.status === 'approved_hod' || !!leave.hodApprovedAt
+    
     const isRejected = leave.status === 'rejected'
     
-    // Determine who rejected (supervisor rejects at pending stage, HOD rejects at supervisor_approved stage)
-    const isSupervisorRejected = isRejected && !leave.supervisorApprovedAt && leave.supervisorRejectedAt
-    const isHODRejected = isRejected && leave.supervisorApprovedAt && !isSupervisorRejected
+    // Determine who rejected
+    // Supervisor rejected: rejected status + supervisorRejectedAt set + no supervisorApprovedAt
+    const isSupervisorRejected = isRejected && !!leave.supervisorRejectedAt && !leave.supervisorApprovedAt
+    
+    // HOD rejected: rejected status + (supervisorApprovedAt set OR hodApprovedAt was set) OR rejectedAt is set without supervisorRejectedAt
+    const isHODRejected = isRejected && (!!leave.supervisorApprovedAt || !!leave.hodApprovedAt || (!!leave.rejectedAt && !leave.supervisorRejectedAt))
     
     const steps = [
       { 
@@ -100,19 +191,40 @@ export default function LeavePage() {
       },
       { 
         label: 'Supervisor Review', 
+        // Completed if: supervisor approved, HOD approved (auto-completed), or rejected
         completed: isSupervisorApproved || isSupervisorRejected || isHODApproved || isHODRejected, 
         icon: isSupervisorRejected ? XCircle : (isSupervisorApproved || isHODApproved || isHODRejected ? CheckCircle2 : Clock),
         rejected: isSupervisorRejected,
-        current: isPending && !isSupervisorRejected
+        current: isPending && !isSupervisorRejected && !isHODApproved && !isHODRejected
       },
       { 
         label: 'Final Review (Encik Shap)', 
-        completed: isHODApproved || isHODRejected, 
+        // Completed if: HOD approved (status is approved_hod OR hodApprovedAt is set) or HOD rejected
+        // Force boolean conversion to ensure it's always a boolean
+        completed: Boolean(isHODApproved || isHODRejected), 
         icon: isHODRejected ? XCircle : (isHODApproved ? CheckCircle2 : (isSupervisorApproved ? Clock : Clock)),
-        rejected: isHODRejected,
-        current: isSupervisorApproved && !isHODApproved && !isHODRejected
+        rejected: Boolean(isHODRejected),
+        current: Boolean(isSupervisorApproved && !isHODApproved && !isHODRejected)
       }
     ]
+    
+    // Enhanced debug logging for ALL leaves to help diagnose the issue
+    console.log('🔍 Step Calculation Debug for leave:', leave.id, {
+      status: leave.status,
+      supervisorApprovedAt: leave.supervisorApprovedAt,
+      hodApprovedAt: leave.hodApprovedAt,
+      supervisorRejectedAt: leave.supervisorRejectedAt,
+      rejectedAt: leave.rejectedAt,
+      isSupervisorApproved,
+      isHODApproved,
+      isSupervisorRejected,
+      isHODRejected,
+      supervisorStepCompleted: steps[1].completed,
+      finalReviewStepCompleted: steps[2].completed,
+      finalReviewIcon: steps[2].icon === CheckCircle2 ? 'CheckCircle2' : steps[2].icon === XCircle ? 'XCircle' : 'Clock',
+      finalReviewCompleted: steps[2].completed
+    })
+    
     return steps
   }
 
@@ -167,9 +279,32 @@ export default function LeavePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     
+    // Use ref for immediate synchronous check to prevent double submission
+    if (isSubmittingRef.current) {
+      console.log('⚠️ Submission already in progress (ref check), ignoring duplicate submit')
+      e.preventDefault()
+      e.stopPropagation()
+      return false
+    }
+    
+    // Also check state as backup
     if (submitting) {
-      return
+      console.log('⚠️ Submission already in progress (state check), ignoring duplicate submit')
+      e.preventDefault()
+      e.stopPropagation()
+      return false
+    }
+    
+    // Disable the form to prevent any further submissions
+    const form = e.currentTarget as HTMLFormElement
+    if (form) {
+      form.style.pointerEvents = 'none'
+      const inputs = form.querySelectorAll('input, button, select, textarea')
+      inputs.forEach((input: any) => {
+        input.disabled = true
+      })
     }
     
     if (!user || !user.id) {
@@ -202,6 +337,8 @@ export default function LeavePage() {
       }
     }
 
+    // Set both ref and state immediately to prevent double submission
+    isSubmittingRef.current = true
     setSubmitting(true)
     
     try {
@@ -210,26 +347,37 @@ export default function LeavePage() {
         mcFileBase64 = await convertFileToBase64(leaveForm.mcFile)
       }
 
-      console.log('Submitting leave application:', {
+      // Generate unique request ID to track this specific submission
+      const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      console.log('📤 Submitting leave application:', {
+        requestId,
         userId: user.id,
         startDate: leaveForm.startDate,
         endDate: leaveForm.endDate,
         reason: leaveForm.reason,
-        hasMcFile: !!mcFileBase64
+        hasMcFile: !!mcFileBase64,
+        timestamp: new Date().toISOString()
       })
 
       const response = await fetch('/api/leaves', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Request-ID': requestId // Add request ID header
+        },
         body: JSON.stringify({
           userId: user.id,
           leaveType: leaveForm.leaveType,
           startDate: leaveForm.startDate,
           endDate: leaveForm.endDate,
           reason: leaveForm.leaveType === 'mc' ? 'Medical Certificate' : leaveForm.reason,
-          mcFile: mcFileBase64
+          mcFile: mcFileBase64,
+          requestId // Include in body too
         })
       })
+      
+      console.log('📥 Response received for request:', requestId, 'Status:', response.status)
 
       console.log('Response status:', response.status)
       
@@ -242,6 +390,17 @@ export default function LeavePage() {
         } catch {
           toast.error(`Server error: ${response.status} - ${errorText}`)
         }
+        // Reset on error so user can retry
+        isSubmittingRef.current = false
+        setSubmitting(false)
+        const form = document.getElementById('leave-application-form') as HTMLFormElement
+        if (form) {
+          form.style.pointerEvents = 'auto'
+          const inputs = form.querySelectorAll('input, button, select, textarea')
+          inputs.forEach((input: any) => {
+            input.disabled = false
+          })
+        }
         return
       }
       
@@ -252,12 +411,26 @@ export default function LeavePage() {
         toast.success('Leave application submitted successfully!')
         setLeaveForm({ leaveType: 'regular', startDate: '', endDate: '', reason: '', mcFile: null })
         setMcPreview(null)
-        // Refresh leave applications list
-        fetchLeaves(user.id)
+        // Reset submission state immediately
+        isSubmittingRef.current = false
+        setSubmitting(false)
+        // Re-enable form
+        const form = document.getElementById('leave-application-form') as HTMLFormElement
+        if (form) {
+          form.style.pointerEvents = 'auto'
+          const inputs = form.querySelectorAll('input, button, select, textarea')
+          inputs.forEach((input: any) => {
+            input.disabled = false
+          })
+        }
+        // Refresh leave applications list after a short delay to ensure DB is updated
+        setTimeout(() => {
+          fetchLeaves(user.id)
+        }, 500)
         // Scroll to "My Leave Applications" section
         setTimeout(() => {
           myLeavesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 100)
+        }, 1000)
       } else {
         console.error('API error:', data.error)
         toast.error(data.error || 'Failed to submit leave application')
@@ -266,6 +439,18 @@ export default function LeavePage() {
       console.error('Error submitting leave application:', error)
       toast.error(`Failed to submit leave application: ${error.message || 'Network error'}`)
     } finally {
+      // Re-enable the form
+      const form = document.getElementById('leave-application-form') as HTMLFormElement
+      if (form) {
+        form.style.pointerEvents = 'auto'
+        const inputs = form.querySelectorAll('input, button, select, textarea')
+        inputs.forEach((input: any) => {
+          input.disabled = false
+        })
+      }
+      
+      // Reset both ref and state
+      isSubmittingRef.current = false
       setSubmitting(false)
     }
   }
@@ -483,6 +668,42 @@ export default function LeavePage() {
     })
   }
 
+  const handleDeleteLeave = async () => {
+    const leaveIdToDelete = deleteDialog.leaveId
+    if (!leaveIdToDelete || !user) {
+      return
+    }
+
+    // Prevent multiple simultaneous deletions
+    if (deleting) {
+      return
+    }
+
+    setDeleting(true)
+    try {
+      console.log('🗑️ Deleting leave application:', leaveIdToDelete)
+      const response = await fetch(`/api/leaves?leaveId=${encodeURIComponent(leaveIdToDelete)}&userId=${encodeURIComponent(user.id)}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        toast.success('Leave application deleted successfully')
+        setDeleteDialog({ open: false, leaveId: null })
+        // Refresh leave applications list
+        await fetchLeaves(user.id)
+      } else {
+        toast.error(data.error || 'Failed to delete leave application')
+      }
+    } catch (error: any) {
+      console.error('Error deleting leave application:', error)
+      toast.error('Failed to delete leave application')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const handleExportCSV = () => {
     exportTableToCSV({
       title: 'Leave Applications',
@@ -529,7 +750,12 @@ export default function LeavePage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form 
+            onSubmit={handleSubmit} 
+            className="space-y-3"
+            id="leave-application-form"
+            noValidate
+          >
             <div className="space-y-1">
               <Label htmlFor="leaveType" className="text-sm">Leave Type *</Label>
               <select
@@ -664,9 +890,13 @@ export default function LeavePage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full gap-2 h-9 text-sm" disabled={submitting}>
+            <Button 
+              type="submit" 
+              className="w-full gap-2 h-9 text-sm" 
+              disabled={submitting || isSubmittingRef.current}
+            >
               <Send className="h-3 w-3" />
-              {submitting ? 'Submitting...' : 'Submit Leave Application'}
+              {submitting || isSubmittingRef.current ? 'Submitting...' : 'Submit Leave Application'}
             </Button>
           </form>
         </CardContent>
@@ -680,22 +910,34 @@ export default function LeavePage() {
                 <Clock className="h-4 w-4" />
                 My Leave Applications
               </CardTitle>
-              {leaves.length > 0 && (
-                <div className="flex gap-2">
-                  <Button onClick={handleExportPDF} variant="outline" size="sm" className="h-8 text-xs">
-                    <Download className="h-3 w-3 mr-1" />
-                    PDF
-                  </Button>
-                  <Button onClick={handleExportCSV} variant="outline" size="sm" className="h-8 text-xs">
-                    <Download className="h-3 w-3 mr-1" />
-                    CSV
-                  </Button>
-                  <Button onClick={handlePrint} variant="outline" size="sm" className="h-8 text-xs">
-                    <Printer className="h-3 w-3 mr-1" />
-                    Print
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => user && fetchLeaves(user.id)} 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 text-xs"
+                  title="Refresh leave applications"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Refresh
+                </Button>
+                {leaves.length > 0 && (
+                  <>
+                    <Button onClick={handleExportPDF} variant="outline" size="sm" className="h-8 text-xs">
+                      <Download className="h-3 w-3 mr-1" />
+                      PDF
+                    </Button>
+                    <Button onClick={handleExportCSV} variant="outline" size="sm" className="h-8 text-xs">
+                      <Download className="h-3 w-3 mr-1" />
+                      CSV
+                    </Button>
+                    <Button onClick={handlePrint} variant="outline" size="sm" className="h-8 text-xs">
+                      <Printer className="h-3 w-3 mr-1" />
+                      Print
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
@@ -721,6 +963,22 @@ export default function LeavePage() {
                         <p className="text-xs text-gray-600 mb-1.5 line-clamp-2">{leave.reason}</p>
                         <div className="mb-1.5">{getStatusBadge(leave.status)}</div>
                       </div>
+                      {leave.status === 'pending' && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            console.log('🗑️ Delete button clicked for leave:', leave.id)
+                            setDeleteDialog({ open: true, leaveId: leave.id })
+                          }}
+                          className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Delete
+                        </Button>
+                      )}
                     </div>
                     
                     {/* Approval Stages */}
@@ -833,6 +1091,34 @@ export default function LeavePage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ open, leaveId: null })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Leave Application</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this leave application? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialog({ open: false, leaveId: null })}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteLeave}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

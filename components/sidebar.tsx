@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import { LayoutDashboard, Clock, FileText, History, Calendar, User, ChevronRight, LogOut, ChevronLeft, Menu, BarChart3, BookOpen, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { markLegitimateNavigation } from "@/lib/navigation-guard"
 
 interface SidebarProps {
   collapsed?: boolean
@@ -50,10 +51,21 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       console.error('Error clearing cookies:', error)
     }
     
+    // Set logout flag to prevent forward navigation
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('logoutFlag', 'true')
+      }
+    } catch (e) {
+      console.warn('Failed to set logout flag:', e)
+    }
+
     // Small delay to ensure all storage is cleared before redirect
     setTimeout(() => {
+      // Replace current history entry to prevent forward navigation
+      window.history.replaceState(null, '', window.location.href)
       // Use replace to prevent back button issues and ensure clean redirect
-      window.location.replace('/?logout=true')
+      window.location.replace('/login?logout=true')
     }, 100)
   }
 
@@ -98,27 +110,27 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           </div>
         </div>
         <nav className="flex-1 space-y-2 px-6">
-          <a href="/admin" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Overview' : undefined}>
+          <a href="/admin" onClick={() => markLegitimateNavigation()} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Overview' : undefined}>
             <LayoutDashboard className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span>Overview</span>}
           </a>
-          <a href="/admin/interns" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Interns' : undefined}>
+          <a href="/admin/interns" onClick={() => markLegitimateNavigation()} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Interns' : undefined}>
             <User className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span>Interns</span>}
           </a>
-          <a href="/admin/leaves" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Leave Review' : undefined}>
+          <a href="/admin/leaves" onClick={() => markLegitimateNavigation()} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Leave Review' : undefined}>
             <Calendar className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span>Leave Review</span>}
           </a>
-          <a href="/admin/reports" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Reports' : undefined}>
+          <a href="/admin/reports" onClick={() => markLegitimateNavigation()} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Reports' : undefined}>
             <BarChart3 className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span>Reports</span>}
           </a>
-          <a href="/admin/attendance" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Attendance' : undefined}>
+          <a href="/admin/attendance" onClick={() => markLegitimateNavigation()} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Attendance' : undefined}>
             <Clock className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span>Attendance</span>}
           </a>
-          <a href="/admin/logs" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Volume Logs' : undefined}>
+          <a href="/admin/logs" onClick={() => markLegitimateNavigation()} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#40e0d0]/10 text-gray-700 hover:text-[#20b2aa] transition-colors" title={collapsed ? 'Volume Logs' : undefined}>
             <FileText className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span>Volume Logs</span>}
           </a>
@@ -149,7 +161,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     { href: '/dashboard/history', label: 'Attendance History', icon: History },
     { href: '/dashboard/leave', label: 'Leave Applications', icon: Calendar },
     { href: '/dashboard/regulations', label: 'Regulations', icon: BookOpen },
-    { href: 'https://langkawiport.com.my/directory/staff-directory/', label: 'Staff Directory', icon: Users, external: true },
+    { href: 'https://langkawiport.com.my/directory', label: 'Staff Directory', icon: Users, external: true },
     { href: '/dashboard/profile', label: 'Profile', icon: User },
   ]
 
@@ -192,6 +204,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               href={item.href}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noopener noreferrer" : undefined}
+              onClick={() => !item.external && markLegitimateNavigation()}
               className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
                 isActive
                   ? 'bg-primary/10 text-primary font-medium'
@@ -215,6 +228,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <nav className="space-y-2">
             <a
               href="/admin"
+              onClick={() => markLegitimateNavigation()}
               className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-gray-700 hover:bg-gray-100`}
               title={collapsed ? 'Admin Overview' : undefined}
             >
@@ -223,10 +237,10 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             </a>
             {!collapsed && (
               <>
-                <a href="/admin/interns" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">Manage Interns</a>
-                <a href="/admin/logs" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">All Volume Logs</a>
-                <a href="/admin/attendance" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">All Attendance</a>
-                <a href="/admin/leaves" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">All Leaves</a>
+                <a href="/admin/interns" onClick={() => markLegitimateNavigation()} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">Manage Interns</a>
+                <a href="/admin/logs" onClick={() => markLegitimateNavigation()} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">All Volume Logs</a>
+                <a href="/admin/attendance" onClick={() => markLegitimateNavigation()} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">All Attendance</a>
+                <a href="/admin/leaves" onClick={() => markLegitimateNavigation()} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors text-sm">All Leaves</a>
               </>
             )}
           </nav>

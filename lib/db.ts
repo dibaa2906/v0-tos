@@ -17,8 +17,19 @@ try {
 }
 
 const db = new Database(dbPath, {
-  timeout: 5000 // Wait up to 5 seconds for locks to clear (reduced from 10s)
+  timeout: 10000, // Wait up to 10 seconds for locks to clear
+  verbose: process.env.NODE_ENV === 'development' ? console.log : undefined
 })
+
+// Enable WAL mode for better concurrency (allows multiple readers)
+try {
+  db.pragma('journal_mode = WAL')
+  db.pragma('busy_timeout = 10000') // 10 second timeout
+} catch (e: any) {
+  if (e?.code !== 'SQLITE_BUSY') {
+    console.warn('Could not set WAL mode:', e)
+  }
+}
 
 // Enable foreign keys with error handling
 try {

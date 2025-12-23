@@ -10,10 +10,11 @@ const nextConfig = {
     unoptimized: true,
   },
   webpack: (config, { isServer }) => {
-    // Ignore face-api.js during build if not installed (optional dependency)
+    // Ignore face-api.js and better-sqlite3 during build
     config.resolve.alias = {
       ...config.resolve.alias,
       'face-api.js': false,
+      'better-sqlite3': false,
     };
     
     // Exclude better-sqlite3 and Node.js modules from client-side bundling
@@ -24,6 +25,8 @@ const nextConfig = {
         net: false,
         tls: false,
         crypto: false,
+        path: false,
+        os: false,
       };
       config.externals = config.externals || [];
       config.externals.push('better-sqlite3');

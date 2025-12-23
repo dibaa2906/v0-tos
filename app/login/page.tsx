@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useLayoutEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,10 +12,75 @@ import { LogIn, User, Lock } from "lucide-react"
 export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  // Use window location as key to force remount on every navigation
+  const [formKey, setFormKey] = useState(() => `${Date.now()}-${Math.random()}`)
   const [formData, setFormData] = useState({
     username: '',
     password: ''
   })
+
+  // Clear form on every render to ensure it's always empty
+  const clearForm = () => {
+    setFormData({
+      username: '',
+      password: ''
+    })
+    setFormKey(`${Date.now()}-${Math.random()}`)
+  }
+
+  // Clear form immediately on mount using useLayoutEffect (runs synchronously before paint)
+  useLayoutEffect(() => {
+    clearForm()
+  }, [])
+
+  // Clear form on page load
+  useEffect(() => {
+    // Always clear form data when page loads (handles back navigation)
+    clearForm()
+
+    // Don't redirect authenticated users - allow them to access the login form
+    // This allows users to switch accounts or view the login form even if logged in
+
+    // Replace current history entry to prevent back/forward navigation
+    window.history.replaceState(null, '', window.location.href)
+
+    // Handle browser back/forward buttons
+    const handlePopState = (e: PopStateEvent) => {
+      // Clear form when navigating back to login page
+      clearForm()
+      // Replace history again to prevent forward navigation
+      window.history.replaceState(null, '', window.location.href)
+    }
+
+    // Handle page visibility change (when user navigates back)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Clear form when page becomes visible again
+        clearForm()
+      }
+    }
+
+    // Handle focus event (when user navigates back to tab)
+    const handleFocus = () => {
+      clearForm()
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('pageshow', (e) => {
+      // Handle back/forward navigation
+      if (e.persisted) {
+        clearForm()
+      }
+    })
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [router])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -174,12 +239,14 @@ export default function LoginPage() {
         console.log('🔄 Redirecting...')
         toast.success(`Welcome back, ${result.user.fullName}!`)
         
-        // Redirect admins to admin panel, others to dashboard
-        const isAdmin = result.user.isAdmin === 1 || 
-                       result.user.isAdmin === true || 
-                       result.user.isAdmin === '1' || 
-                       result.user.isAdmin === 'true'
-        const redirectPath = isAdmin ? "/admin" : "/dashboard"
+        // Check if user is admin and redirect accordingly
+        const userIsAdmin = result.user.isAdmin === 1 || 
+                           result.user.isAdmin === true || 
+                           String(result.user.isAdmin) === '1' || 
+                           String(result.user.isAdmin) === 'true'
+        
+        // Redirect admins to admin dashboard, interns to intern dashboard
+        const redirectPath = userIsAdmin ? "/admin" : "/dashboard"
         
         console.log('🔍 User isAdmin:', result.user.isAdmin, 'Type:', typeof result.user.isAdmin, 'Redirecting to:', redirectPath)
         
@@ -210,14 +277,26 @@ export default function LoginPage() {
         console.log('🔄 Full redirect URL:', fullUrl)
         console.log('🔄 Current location:', window.location.href)
         
-        // Redirect immediately with error handling
+        // Mark this as legitimate navigation before redirecting
         try {
-          window.location.href = fullUrl
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('legitimateNavigation', 'true')
+          }
+        } catch (e) {
+          console.warn('Failed to mark legitimate navigation:', e)
+        }
+        
+        // Redirect immediately with error handling
+        // Use replace instead of href to prevent back navigation
+        try {
+          // Replace current history entry before redirecting to prevent back navigation
+          window.history.replaceState(null, '', window.location.href)
+          window.location.replace(fullUrl)
         } catch (redirectError) {
           console.error('❌ Redirect error:', redirectError)
           toast.error('Redirect failed. Please navigate manually to ' + redirectPath)
-          // Fallback: try router
-          router.push(redirectPath)
+          // Fallback: try router replace
+          router.replace(redirectPath)
         }
       } else {
         console.log('❌ Login failed - invalid response:', result)
@@ -253,6 +332,7 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form 
+            key={formKey}
             onSubmit={onSubmit} 
             className="space-y-4"
             action="#" 

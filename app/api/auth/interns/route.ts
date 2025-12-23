@@ -23,13 +23,20 @@ export async function GET(req: NextRequest) {
     
     let query: string
     if (hasPhoneNumber) {
-      query = 'SELECT id, fullName, username, email, department, isAdmin, profilePhoto, createdAt, isPhoneVerified, isActive, address, emergencyContactName, emergencyContactPhone, phoneNumber FROM users WHERE isAdmin = 0 OR isAdmin IS NULL ORDER BY createdAt DESC'
+      query = 'SELECT DISTINCT id, fullName, username, email, department, isAdmin, profilePhoto, createdAt, isPhoneVerified, isActive, address, emergencyContactName, emergencyContactPhone, phoneNumber FROM users WHERE isAdmin = 0 OR isAdmin IS NULL ORDER BY createdAt DESC'
     } else {
-      query = 'SELECT id, fullName, username, email, department, isAdmin, profilePhoto, createdAt, isPhoneVerified, isActive, address, emergencyContactName, emergencyContactPhone FROM users WHERE isAdmin = 0 OR isAdmin IS NULL ORDER BY createdAt DESC'
+      query = 'SELECT DISTINCT id, fullName, username, email, department, isAdmin, profilePhoto, createdAt, isPhoneVerified, isActive, address, emergencyContactName, emergencyContactPhone FROM users WHERE isAdmin = 0 OR isAdmin IS NULL ORDER BY createdAt DESC'
     }
     
     const allUsers = db.prepare(query).all()
-    return NextResponse.json({ interns: allUsers })
+    // Additional deduplication by ID to ensure no duplicates
+    const uniqueUsers = allUsers.reduce((acc: any[], user: any) => {
+      if (!acc.find(u => u.id === user.id)) {
+        acc.push(user)
+      }
+      return acc
+    }, [])
+    return NextResponse.json({ interns: uniqueUsers })
   } catch (error: any) {
     console.error('Error fetching interns:', error)
     return NextResponse.json({ error: error.message || 'Failed to fetch interns', interns: [] }, { status: 500 })

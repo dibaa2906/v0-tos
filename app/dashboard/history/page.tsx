@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Calendar, Clock, CheckCircle, XCircle, Printer, ZoomIn } from "lucide-react"
@@ -14,8 +15,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { checkDirectAccess } from "@/lib/navigation-guard"
 
 export default function AttendanceHistoryPage() {
+  const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [records, setRecords] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,6 +26,40 @@ export default function AttendanceHistoryPage() {
   const [imageType, setImageType] = useState<'clockin' | 'clockout'>('clockin')
 
   useEffect(() => {
+    // Check if this is a legitimate login redirect (has auth params)
+    const urlParams = new URLSearchParams(window.location.search)
+    const isLoginRedirect = urlParams.get('auth') === 'true' && urlParams.get('userId')
+    
+    // Only check for direct access if this is NOT a login redirect
+    if (!isLoginRedirect) {
+      try {
+        if (checkDirectAccess()) {
+          console.log('[AttendanceHistoryPage] Direct access detected, redirecting to login')
+          router.replace('/login')
+          return
+        }
+      } catch (error) {
+        console.error('[AttendanceHistoryPage] Error checking direct access:', error)
+      }
+    }
+
+    // Check for logout flag - prevent forward navigation after logout
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const logoutFlag = sessionStorage.getItem('logoutFlag')
+        if (logoutFlag === 'true') {
+          sessionStorage.removeItem('logoutFlag')
+          router.replace('/login')
+          return
+        }
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+
+    // Replace history to prevent forward navigation
+    window.history.replaceState(null, '', window.location.href)
+
     const fetchData = async () => {
       const currentUser = await getCurrentUser()
       if (currentUser) {

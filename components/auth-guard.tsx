@@ -3,9 +3,10 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { isAuthenticated } from "@/lib/auth"
+import { useRouter, usePathname } from "next/navigation"
+// Removed isAuthenticated import - will check auth client-side via localStorage
 import { Loader2 } from "lucide-react"
+import { checkDirectAccess } from "@/lib/navigation-guard"
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -15,13 +16,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthed, setIsAuthed] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     let mounted = true
     let timeoutId: NodeJS.Timeout | null = null
     let redirectTimer: NodeJS.Timeout | null = null
     
-    // FIRST: Check URL parameters immediately (highest priority for Safari)
+    // FIRST: Check URL parameters immediately (highest priority - login redirects)
     const urlParams = new URLSearchParams(window.location.search)
     const urlAuth = urlParams.get('auth') === 'true'
     const urlUserId = urlParams.get('userId')
@@ -79,7 +81,42 @@ export function AuthGuard({ children }: AuthGuardProps) {
       }
     }
     
-    // SECOND: Check storage-based auth (only if no URL params)
+    // SECOND: Check for logout flag - prevent forward navigation after logout
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const logoutFlag = sessionStorage.getItem('logoutFlag')
+        if (logoutFlag === 'true') {
+          console.log('[AuthGuard] Logout flag detected, redirecting to login')
+          sessionStorage.removeItem('logoutFlag')
+          router.replace('/login')
+          return () => {
+            mounted = false
+            if (timeoutId) clearTimeout(timeoutId)
+            if (redirectTimer) clearTimeout(redirectTimer)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[AuthGuard] Error checking logout flag:', error)
+    }
+
+    // THIRD: Check for direct access (copy-paste URL) - redirect to login
+    try {
+      if (checkDirectAccess()) {
+        console.log('[AuthGuard] Direct access detected, redirecting to login')
+        router.replace('/login')
+        return () => {
+          mounted = false
+          if (timeoutId) clearTimeout(timeoutId)
+          if (redirectTimer) clearTimeout(redirectTimer)
+        }
+      }
+    } catch (error) {
+      console.error('[AuthGuard] Error checking direct access:', error)
+      // Continue with normal auth flow if check fails
+    }
+    
+    // FOURTH: Check storage-based auth (only if no URL params)
     const checkStorageAuth = () => {
       try {
         if (typeof sessionStorage !== 'undefined') {
@@ -121,20 +158,21 @@ export function AuthGuard({ children }: AuthGuardProps) {
       }
     }
 
-    // If no auth found, wait a bit then check again (Safari timing)
+    // If no auth found, redirect to login immediately
+    // (Small delay for Safari localStorage timing, but much shorter)
     timeoutId = setTimeout(() => {
       if (!mounted) return
       
       if (!checkStorageAuth()) {
         // Still no auth - redirect to login
-        console.log('[AuthGuard] No auth found after timeout, redirecting to login')
+        console.log('[AuthGuard] No auth found, redirecting to login')
         setIsAuthed(false)
         setIsLoading(false)
         redirectTimer = setTimeout(() => {
-          router.push("/login")
+          router.replace("/login")
         }, 100)
       }
-    }, 1500)
+    }, 300) // Reduced from 1500ms to 300ms for faster redirect
 
     return () => {
       mounted = false
@@ -144,18 +182,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
   }, [router])
 
   if (!isAuthed) {
-    // Show loading state while redirecting
-    console.log('[AuthGuard] Rendering not authenticated state', { isLoading, isAuthed })
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="text-muted-foreground">
-            {isLoading ? 'Loading...' : 'Redirecting to login...'}
-          </span>
-        </div>
-      </div>
-    )
+    // Return null to allow immediate redirect without showing loading state
+    console.log('[AuthGuard] Not authenticated, redirecting to login')
+    return null
   }
 
   console.log('[AuthGuard] User authenticated, rendering children')
@@ -163,7 +192,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 }
 
 // AdminGuard: Ensures isAuthenticated AND currentUser.isAdmin (uses localStorage and DB)
-import { getCurrentUser } from '@/lib/auth'
+// Removed getCurrentUser import - will get user from localStorage/sessionStorage
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthed, setIsAuthed] = useState(false)
@@ -171,11 +200,52 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
+    // Check for logout flag - prevent forward navigation after logout
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const logoutFlag = sessionStorage.getItem('logoutFlag')
+        if (logoutFlag === 'true') {
+          console.log('[AdminGuard] Logout flag detected, redirecting to login')
+          sessionStorage.removeItem('logoutFlag')
+          router.replace('/login')
+          return
+        }
+      }
+    } catch (error) {
+      console.error('[AdminGuard] Error checking logout flag:', error)
+    }
+
+    // Check for direct access (copy-paste URL) - redirect to homepage
+    try {
+      if (checkDirectAccess()) {
+        console.log('[AdminGuard] Direct access detected, redirecting to login')
+        router.replace('/login')
+        return
+      }
+    } catch (error) {
+      console.error('[AdminGuard] Error checking direct access:', error)
+      // Continue with normal auth flow if check fails
+    }
+
     async function check() {
-      const authenticated = isAuthenticated()
+      // Check authentication client-side (avoid importing server-side code)
+      let authenticated = false
+      try {
+        if (typeof window !== 'undefined') {
+          authenticated = sessionStorage.getItem("isAuthenticated") === "true" || 
+                          localStorage.getItem("isAuthenticated") === "true" ||
+                          !!sessionStorage.getItem("currentUserId") ||
+                          !!localStorage.getItem("currentUserId") ||
+                          !!sessionStorage.getItem("currentUser") ||
+                          !!localStorage.getItem("currentUser")
+        }
+      } catch (error) {
+        console.warn('Storage check error:', error)
+      }
+      
       setIsAuthed(authenticated)
       if (!authenticated) {
-        router.push('/')
+        router.replace('/login')
         setIsLoading(false)
         return
       }
@@ -212,33 +282,45 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
         }
       }
       
-      // Fallback to API fetch
-      const user = await getCurrentUser()
-        console.log('[AdminGuard] Fetched user from API:', user?.isAdmin, 'Type:', typeof user?.isAdmin)
-        try {
-          if (user) {
-            localStorage.setItem('currentUser', JSON.stringify(user))
-            if (typeof sessionStorage !== 'undefined') {
-              sessionStorage.setItem('currentUser', JSON.stringify(user))
-              if (user.id) {
-                sessionStorage.setItem('currentUserId', user.id)
+      // Fallback to API fetch (doesn't require importing database code)
+      try {
+        const userId = sessionStorage.getItem('currentUserId') || localStorage.getItem('currentUserId')
+        if (userId) {
+          const response = await fetch(`/api/auth/me?userId=${userId}`)
+          const data = await response.json()
+          if (data.success && data.user) {
+            const user = data.user
+            console.log('[AdminGuard] Fetched user from API:', user?.isAdmin, 'Type:', typeof user?.isAdmin)
+            try {
+              localStorage.setItem('currentUser', JSON.stringify(user))
+              if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.setItem('currentUser', JSON.stringify(user))
+                if (user.id) {
+                  sessionStorage.setItem('currentUserId', user.id)
+                }
               }
+            } catch (error) {
+              console.warn('Failed to cache fetched admin user:', error)
+            }
+            // Check if user is admin (handle both integer, boolean, and string values)
+            const userIsAdmin = user?.isAdmin === 1 || 
+                                user?.isAdmin === true || 
+                                String(user?.isAdmin) === '1' || 
+                                String(user?.isAdmin) === 'true'
+            console.log('[AdminGuard] User isAdmin check result from API:', userIsAdmin)
+            if (userIsAdmin) {
+              setIsAdmin(true)
+            } else {
+              console.log('[AdminGuard] User is not admin, redirecting to login. isAdmin value:', user?.isAdmin, 'Type:', typeof user?.isAdmin)
+              router.replace('/login')
+              setIsLoading(false)
+              return
             }
           }
-        } catch (error) {
-          console.warn('Failed to cache fetched admin user:', error)
         }
-      // Check if user is admin (handle both integer, boolean, and string values)
-      const userIsAdmin = user?.isAdmin === 1 || 
-                          user?.isAdmin === true || 
-                          String(user?.isAdmin) === '1' || 
-                          String(user?.isAdmin) === 'true'
-      console.log('[AdminGuard] User isAdmin check result from API:', userIsAdmin)
-      if (userIsAdmin) {
-        setIsAdmin(true)
-      } else {
-        console.log('[AdminGuard] User is not admin, redirecting to dashboard. isAdmin value:', user?.isAdmin, 'Type:', typeof user?.isAdmin)
-        router.push('/dashboard')
+      } catch (error) {
+        console.error('Error fetching user:', error)
+        router.replace('/login')
         setIsLoading(false)
         return
       }
@@ -247,14 +329,19 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     check()
   }, [router])
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <span className="text-muted-foreground ml-2">Loading admin...</span>
-      </div>
-    )
+  // If not authenticated, redirect to login immediately (no loading state)
+  if (!isAuthed) {
+    return null // Component will redirect in useEffect
   }
-  if (!isAuthed || !isAdmin) return null
+  
+  // If authenticated but not admin, redirect to login
+  if (!isAdmin) {
+    return null // Component will redirect in useEffect
+  }
+  
+  // Show loading only while checking admin status
+  if (isLoading) {
+    return null // Don't show loading, let redirect happen
+  }
   return <>{children}</>
 }

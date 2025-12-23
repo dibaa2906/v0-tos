@@ -9,3 +9,8 @@ export const DEPARTMENTS = [
 
 export type Department = typeof DEPARTMENTS[number]
 
+
+
+
+
+

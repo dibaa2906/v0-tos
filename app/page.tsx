@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { isAuthenticated } from "@/lib/auth"
+// Removed isAuthenticated import - will check auth client-side via localStorage
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Clock, CheckCircle, MapPin, Camera, Calendar, User, Shield, BarChart3, FileText, ArrowRight, Anchor, Facebook, Instagram, Youtube } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import { markLegitimateNavigation } from "@/lib/navigation-guard"
 
 export default function HomePage() {
   const router = useRouter()
@@ -32,14 +33,9 @@ export default function HomePage() {
       return
     }
     
-    try {
-      if (isAuthenticated()) {
-        router.push("/dashboard")
-      }
-    } catch (error) {
-      // Ignore errors during auth check
-      console.error('Auth check error:', error)
-    }
+    // Don't auto-redirect authenticated users - let them access the homepage
+    // They can manually navigate to dashboard if needed
+    // Removed automatic redirect to allow homepage access even when logged in
   }, [isClient, router])
 
   const features = [
@@ -128,17 +124,27 @@ export default function HomePage() {
               <span className="text-xl font-bold text-gray-900">Langkawi Port Sdn Bhd</span>
             </Link>
             <div className="flex items-center gap-2 sm:gap-3">
-              <Link href="/login">
-                <Button variant="outline" size="sm" className="border-2">
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/signup">
-                <Button size="sm">
-                  Sign Up
-                  <ArrowRight className="ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4" />
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-2"
+                onClick={() => {
+                  markLegitimateNavigation()
+                  router.push('/login')
+                }}
+              >
+                Sign In
+              </Button>
+              <Button 
+                size="sm"
+                onClick={() => {
+                  markLegitimateNavigation()
+                  router.push('/signup')
+                }}
+              >
+                Sign Up
+                <ArrowRight className="ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -160,17 +166,28 @@ export default function HomePage() {
               Streamline your internship experience at Langkawi Port with our comprehensive management platform.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
-              <Link href="/signup" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full sm:w-auto h-14 px-10 text-lg">
-                  Get Started Free
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
-              <Link href="/login" className="w-full sm:w-auto">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto h-14 px-10 text-lg border-2">
-                  Sign In
-                </Button>
-              </Link>
+              <Button 
+                size="lg" 
+                className="w-full sm:w-auto h-14 px-10 text-lg"
+                onClick={() => {
+                  markLegitimateNavigation()
+                  router.push('/signup')
+                }}
+              >
+                Get Started Free
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="w-full sm:w-auto h-14 px-10 text-lg border-2"
+                onClick={() => {
+                  markLegitimateNavigation()
+                  router.push('/login')
+                }}
+              >
+                Sign In
+              </Button>
             </div>
           </div>
         </div>

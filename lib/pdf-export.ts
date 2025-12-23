@@ -13,74 +13,35 @@ export interface ExportOptions {
   filename?: string
   userName?: string
   userDepartment?: string
+  filterText?: string
 }
 
 export function exportTableToPDF(options: ExportOptions) {
-  const { title, columns, data, filename = 'export.pdf', userName, userDepartment } = options
+  const { title, columns, data, filename = 'export.pdf', userName, userDepartment, filterText } = options
   
   const doc = new jsPDF('landscape', 'mm', 'a4')
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 15
-  const startY = 15
+  const startY = 20
   let currentY = startY
-
-  // Header section with border
-  doc.setLineWidth(0.5)
-  doc.line(margin, currentY, pageWidth - margin, currentY)
-  currentY += 5
-
-  // User information
-  if (userName || userDepartment) {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    const leftX = margin
-    const rightX = pageWidth - margin - 60
-    
-    if (userName) {
-      doc.setFont('helvetica', 'bold')
-      doc.text('Name:', leftX, currentY)
-      doc.setFont('helvetica', 'normal')
-      doc.text(userName, leftX + 20, currentY)
-    }
-    
-    if (userDepartment) {
-      currentY += 5
-      doc.setFont('helvetica', 'bold')
-      doc.text('Department:', leftX, currentY)
-      doc.setFont('helvetica', 'normal')
-      doc.text(userDepartment, leftX + 30, currentY)
-    }
-    
-    // Right side - Print date and total records
-    const printDate = new Date().toLocaleString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })
-    doc.setFont('helvetica', 'bold')
-    doc.text('Printed:', rightX, startY + 5)
-    doc.setFont('helvetica', 'normal')
-    doc.text(printDate, rightX + 20, startY + 5)
-    
-    doc.setFont('helvetica', 'bold')
-    doc.text('Total Records:', rightX, startY + 10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(String(data.length), rightX + 35, startY + 10)
-    
-    currentY += 8
-    doc.line(margin, currentY, pageWidth - margin, currentY)
-    currentY += 8
-  }
 
   // Title
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
   const titleWidth = doc.getTextWidth(title)
-  doc.text(title, (pageWidth - titleWidth) / 2, currentY)
-  currentY += 10
+  doc.text(title, margin, currentY)
+  currentY += 8
+  
+  // Filter text (if provided)
+  if (filterText) {
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'normal')
+    doc.text(filterText, margin, currentY)
+    currentY += 8
+  } else {
+    currentY += 4
+  }
 
   if (data.length === 0) {
     doc.text('No data available', margin, currentY)
@@ -111,12 +72,33 @@ export function exportTableToPDF(options: ExportOptions) {
   doc.setFontSize(9)
   
   data.forEach((row, rowIdx) => {
-    // Check if we need a new page
-    if (currentY > pageHeight - 20) {
+    let rowStartY = currentY
+    let maxRowHeight = 6 // Minimum row height
+    
+    // First pass: calculate cell heights for multi-line content
+    columns.forEach((col, colIdx) => {
+      let cellValue = ''
+      if (typeof col.accessor === 'function') {
+        cellValue = col.accessor(row)
+      } else {
+        cellValue = String(row[col.accessor] || '')
+      }
+      
+      const maxWidth = columnWidths[colIdx] - 2
+      // Split text into multiple lines if needed
+      const lines = doc.splitTextToSize(cellValue, maxWidth)
+      const cellHeight = lines.length * 5 // 5mm per line
+      maxRowHeight = Math.max(maxRowHeight, cellHeight)
+    })
+    
+    // Check if we need a new page before rendering this row
+    if (currentY + maxRowHeight > pageHeight - 20) {
       doc.addPage()
       currentY = startY
+      rowStartY = currentY
     }
-
+    
+    // Second pass: render cells with proper line wrapping
     xPos = margin
     columns.forEach((col, colIdx) => {
       let cellValue = ''
@@ -126,17 +108,19 @@ export function exportTableToPDF(options: ExportOptions) {
         cellValue = String(row[col.accessor] || '')
       }
       
-      // Truncate long text
       const maxWidth = columnWidths[colIdx] - 2
-      if (doc.getTextWidth(cellValue) > maxWidth) {
-        cellValue = doc.splitTextToSize(cellValue, maxWidth)[0] + '...'
-      }
+      // Split text into multiple lines
+      const lines = doc.splitTextToSize(cellValue, maxWidth)
       
-      doc.text(cellValue, xPos, currentY)
+      // Render each line
+      lines.forEach((line: string, lineIdx: number) => {
+        doc.text(line, xPos, rowStartY + (lineIdx * 5))
+      })
+      
       xPos += columnWidths[colIdx]
     })
     
-    currentY += 6
+    currentY += maxRowHeight + 2 // Add spacing between rows
   })
 
   doc.save(filename)

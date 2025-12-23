@@ -461,13 +461,41 @@ export default function SignupPage() {
     
     setLoading(true)
     try {
+      // Ensure all required fields are included in userData
+      const finalUserData = {
+        ...userData,
+        email: (userData?.email || email)?.toLowerCase().trim(), // Normalize email before sending
+        profilePhoto: profilePhoto || userData?.profilePhoto, // Use state photo or userData photo
+        phoneNumber: userData?.phoneNumber || '', // Ensure phoneNumber is included
+        verificationCode: userData?.verificationCode || storedVerificationCode, // Ensure verificationCode is included
+        emergencyContact: userData?.emergencyContact || {
+          name: userData?.emergencyContactName || '',
+          phoneNumber: userData?.emergencyContactPhone || ''
+        }
+      }
+      
+      // Validate required fields
+      if (!finalUserData.profilePhoto) {
+        toast.error('Profile photo is required. Please capture your photo again.')
+        setVerificationStep("photo")
+        setLoading(false)
+        return
+      }
+      
+      if (!finalUserData.phoneNumber || finalUserData.phoneNumber.trim() === '') {
+        toast.error('Phone number is required.')
+        setVerificationStep("info")
+        setLoading(false)
+        return
+      }
+      
       console.log('📤 Sending verification request:', {
         verificationCode,
         codeLength: verificationCode?.length,
-        userDataEmail: userData?.email,
-        userDataVerificationCode: userData?.verificationCode,
-        hasProfilePhoto: !!profilePhoto,
-        userDataKeys: userData ? Object.keys(userData) : []
+        userDataEmail: finalUserData?.email,
+        userDataVerificationCode: finalUserData?.verificationCode,
+        hasProfilePhoto: !!finalUserData.profilePhoto,
+        userDataKeys: finalUserData ? Object.keys(finalUserData) : []
       })
 
       const response = await fetch('/api/auth/signup', {
@@ -475,12 +503,7 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           verificationCode: String(verificationCode || '').trim(),
-          userData: {
-            ...userData,
-            email: userData?.email?.toLowerCase().trim(), // Normalize email before sending
-            profilePhoto,
-            verificationCode: userData?.verificationCode // Ensure verificationCode is included
-          }
+          userData: finalUserData
         })
       })
 
@@ -629,8 +652,18 @@ export default function SignupPage() {
                 console.log('📸 Photo confirmed by user, sending verification code to email...')
                 setProfilePhoto(photo)
                 
-                // Immediately proceed to verification step (don't wait for email)
-                setVerificationStep("verify")
+                // Update userData with photo immediately, ensuring all fields are preserved
+                const updatedUserData = {
+                  ...userData,
+                  profilePhoto: photo,
+                  email: userData.email?.toLowerCase().trim() || userData.email, // Normalize email
+                  phoneNumber: userData.phoneNumber || '', // Ensure phoneNumber is included
+                  emergencyContact: userData.emergencyContact || {
+                    name: userData.emergencyContactName || '',
+                    phoneNumber: userData.emergencyContactPhone || ''
+                  }
+                }
+                setUserData(updatedUserData)
                 
                 // Send verification code in background (non-blocking)
                 setLoading(true)
@@ -638,17 +671,20 @@ export default function SignupPage() {
                   const response = await fetch('/api/auth/signup', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userData })
+                    body: JSON.stringify({ userData: updatedUserData })
                   })
 
                   const result = await response.json()
+                  console.log('📧 PATCH response:', { ok: response.ok, result })
 
                   if (response.ok && result.verificationCode) {
-                    // Update userData with verification code
-                    setUserData({
-                      ...userData,
+                    // Update userData with verification code and ensure all fields from response are included
+                    const finalUserData = {
+                      ...(result.userData || updatedUserData), // Use response userData if available, otherwise use updatedUserData
+                      profilePhoto: photo, // Ensure photo is included
                       verificationCode: result.verificationCode
-                    })
+                    }
+                    setUserData(finalUserData)
                     setStoredVerificationCode(result.verificationCode)
                     
                     if (result.emailSent) {
@@ -661,16 +697,21 @@ export default function SignupPage() {
                       console.error('📧 Email sending failed. Using fallback verification.')
                     }
                     
-                    setEmail(userData.email)
+                    setEmail(updatedUserData.email)
                     setCanResend(false)
                     setCountdown(60) // 1 minute countdown before resend is allowed
+                    
+                    // Proceed to verification step AFTER code is sent
+                    setVerificationStep("verify")
                   } else {
                     toast.error(result.error || 'Failed to send verification code')
                     console.error('❌ Failed to send verification code:', result)
+                    // Don't proceed to verification if code sending failed
                   }
                 } catch (error) {
                   console.error('❌ Error sending verification code:', error)
                   toast.error('Failed to send verification code. Please try again.')
+                  // Don't proceed to verification if there's an error
                 } finally {
                   setLoading(false)
                 }

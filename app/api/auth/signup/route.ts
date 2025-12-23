@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         },
         email: normalizedEmail, // Use normalized email consistently
         password,
-        phoneNumber,
+        phoneNumber: phoneNumber || '', // Ensure phoneNumber is always included
         institution,
         lecturerContactName,
         lecturerContactPhone
@@ -151,14 +151,20 @@ export async function PATCH(request: NextRequest) {
       console.log('⚠️ Verification code available in response for testing')
     }
 
+    // Ensure userData has all required fields including profilePhoto
+    const updatedUserData = {
+      ...userData,
+      email: normalizedEmail, // Ensure normalized email is used
+      profilePhoto: userData.profilePhoto || null, // Ensure profilePhoto is included
+      phoneNumber: userData.phoneNumber || '', // Ensure phoneNumber is included
+      verificationCode: code // Include code in userData as fallback
+    }
+    
     // Only return code if email failed (for debugging), otherwise don't expose it
     return NextResponse.json({ 
       success: true, 
       verificationCode: code, // Always return code for verification (used as fallback)
-      userData: {
-        ...userData,
-        verificationCode: code // Include code in userData as fallback
-      },
+      userData: updatedUserData,
       message: emailSent.sent 
         ? 'Verification code sent to your email!' 
         : `Email sending failed: ${emailSent.error || 'Unknown error'}. Please check your email configuration.`,
@@ -287,24 +293,36 @@ export async function PUT(request: NextRequest) {
     }
 
     // Create user in database
+    // Declare user variable outside try block so it's accessible later
+    let user: any = null
     try {
-      const user = {
+      // Ensure we have all required fields with proper fallbacks
+      user = {
         id: userData.id,
         fullName: userData.fullName,
         username: userData.username,
         address: userData.address,
         department: userData.department,
-        emergencyContactName: userData.emergencyContact?.name || userData.emergencyContactName,
-        emergencyContactPhone: userData.emergencyContact?.phoneNumber || userData.emergencyContactPhone,
-        email: userData.email,
+        emergencyContactName: userData.emergencyContact?.name || userData.emergencyContactName || '',
+        emergencyContactPhone: userData.emergencyContact?.phoneNumber || userData.emergencyContactPhone || '',
+        email: email, // Use normalized email from verification
         password: userData.password,
         profilePhoto: userData.profilePhoto || null,
-        phoneNumber: userData.phoneNumber || userData.emergencyContactPhone || userData.emergencyContact?.phoneNumber || '', // Use phoneNumber from userData, fallback to emergencyContactPhone
+        phoneNumber: userData.phoneNumber || '', // Use phoneNumber from userData
         isPhoneVerified: 0, // Default to not verified
         isAdmin: 0, // Default to not admin
         institution: userData.institution || null,
         lecturerContactName: userData.lecturerContactName || null,
         lecturerContactPhone: userData.lecturerContactPhone || null
+      }
+      
+      // Validate required fields before creating user
+      if (!user.phoneNumber || user.phoneNumber.trim() === '') {
+        console.error('❌ phoneNumber is required but missing:', user)
+        return NextResponse.json(
+          { error: 'Phone number is required' },
+          { status: 400 }
+        )
       }
 
       console.log('👤 Creating user in database:', { 
@@ -331,26 +349,35 @@ export async function PUT(request: NextRequest) {
     }
 
     // Notify all admins about new intern
-    try {
-      const admins = db.prepare('SELECT id FROM users WHERE isAdmin = 1').all() as any[]
-      const notificationId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      
-      admins.forEach((admin) => {
-        db.prepare(`
-          INSERT INTO notifications (id, userId, targetUserId, type, title, message)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(
-          `${notificationId}-${admin.id}`,
-          user.id,
-          admin.id,
-          'new_intern',
-          'New Intern Joined',
-          `${user.fullName} just signed up`
-        )
-      })
-    } catch (error) {
-      console.error('Error creating notification:', error)
-      // Don't fail the signup if notification fails
+    if (user) {
+      try {
+        const admins = db.prepare('SELECT id FROM users WHERE isAdmin = 1').all() as any[]
+        const notificationId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        
+        admins.forEach((admin) => {
+          db.prepare(`
+            INSERT INTO notifications (id, userId, targetUserId, type, title, message)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(
+            `${notificationId}-${admin.id}`,
+            user.id,
+            admin.id,
+            'new_intern',
+            'New Intern Joined',
+            `${user.fullName} just signed up`
+          )
+        })
+      } catch (error) {
+        console.error('Error creating notification:', error)
+        // Don't fail the signup if notification fails
+      }
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Failed to create user' },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json({ 
