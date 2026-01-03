@@ -16,24 +16,19 @@ export function CorporateHero() {
           <div className="mx-auto max-w-4xl text-center">
             <div className="mb-8">
               <span className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-                Enterprise Platform
+                Langkawi Port Authority
               </span>
             </div>
             <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl text-balance">
-              The complete platform to <span className="text-muted-foreground">build the web</span>
+              Intern <span className="text-muted-foreground">Attendance System</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted-foreground text-pretty">
-              Your team's toolkit to stop configuring and start innovating. Securely build, deploy, and scale the best
-              web experiences with Enterprise.
+              Manage your attendance, volume logs, and leave applications all in one place. Clock in/out, track your hours, and apply for leave seamlessly.
             </p>
             <div className="mt-10 flex items-center justify-center gap-4">
               <Button size="lg" onClick={() => setIsLoginOpen(true)} className="h-12 px-8">
-                Get a demo
+                Sign In
                 <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="lg" className="h-12 px-8 bg-transparent">
-                <Play className="mr-2 h-4 w-4" />
-                Watch Demo
               </Button>
             </div>
           </div>

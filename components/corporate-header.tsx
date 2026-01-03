@@ -18,7 +18,7 @@ export function CorporateHeader() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground">
                 <div className="h-4 w-4 rounded-sm bg-background"></div>
               </div>
-              <span className="text-xl font-semibold text-foreground">Enterprise</span>
+              <span className="text-xl font-semibold text-foreground">Intern Attendance System</span>
             </div>
 
             <nav className="hidden md:flex items-center gap-8">
@@ -29,22 +29,10 @@ export function CorporateHeader() {
                 Features
               </a>
               <a
-                href="#solutions"
+                href="/dashboard"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
-                Solutions
-              </a>
-              <a
-                href="#pricing"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Pricing
-              </a>
-              <a
-                href="#docs"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Documentation
+                Dashboard
               </a>
             </nav>
 
@@ -70,22 +58,10 @@ export function CorporateHeader() {
                   Features
                 </a>
                 <a
-                  href="#solutions"
+                  href="/dashboard"
                   className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Solutions
-                </a>
-                <a
-                  href="#pricing"
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Pricing
-                </a>
-                <a
-                  href="#docs"
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Documentation
+                  Dashboard
                 </a>
                 <div className="flex flex-col gap-2 pt-4 border-t border-border">
                   <Button variant="ghost" onClick={() => setIsLoginOpen(true)}>

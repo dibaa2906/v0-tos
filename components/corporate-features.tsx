@@ -5,27 +5,27 @@ export function CorporateFeatures() {
   const features = [
     {
       icon: Zap,
-      title: "Faster iteration. More innovation.",
+      title: "Clock In/Out",
       description:
-        "The platform for rapid progress. Let your team focus on shipping features instead of managing infrastructure with automated CI/CD, built-in testing, and integrated collaboration.",
+        "Easy clock-in and clock-out system with real-time tracking. Monitor your daily attendance and working hours effortlessly.",
     },
     {
       icon: Shield,
-      title: "Enterprise-grade security",
+      title: "Attendance History",
       description:
-        "Built with security at the forefront. SOC 2 Type II compliant, GDPR ready, and enterprise SSO integration to keep your data safe and compliant.",
+        "View your complete attendance records, track hours worked, and monitor your attendance status all in one place.",
     },
     {
       icon: Users,
-      title: "Make teamwork seamless",
+      title: "Leave Management",
       description:
-        "Tools for your team and stakeholders to share feedback and iterate faster. Real-time collaboration, preview deployments, and integrated workflows.",
+        "Submit leave applications, track approval status, and manage different types of leave including annual, sick, and emergency leave.",
     },
     {
       icon: Globe,
-      title: "Global scale, local performance",
+      title: "Volume Logs",
       description:
-        "Deploy to the edge with automatic optimization. CDN, serverless functions, and global infrastructure that scales with your business needs.",
+        "Record your daily tasks and activities with our volume logging system. Keep track of your work progress and contributions.",
     },
   ]
 
@@ -33,9 +33,9 @@ export function CorporateFeatures() {
     <section id="features" className="bg-background py-24 sm:py-32">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center mb-16">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Built for enterprise teams</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">System Features</h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Everything you need to build, deploy, and scale modern web applications with confidence.
+            All the tools you need to manage your attendance and daily activities efficiently.
           </p>
         </div>
 
