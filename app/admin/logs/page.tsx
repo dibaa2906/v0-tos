@@ -18,7 +18,10 @@ function LogsTable() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    getCurrentUser().then(user => setCurrentUser(user)).catch(console.error);
+    const user = getCurrentUser();
+    if (user) {
+      setCurrentUser(user);
+    }
   }, []);
 
   useEffect(() => { 
@@ -61,10 +64,10 @@ function LogsTable() {
     return null
   }
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const filterText = getFilterText()
     
-    exportTableToPDF({
+    await exportTableToPDF({
       title: 'All Volume Logs',
       filterText: filterText || undefined,
       columns: [

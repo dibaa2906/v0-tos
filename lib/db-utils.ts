@@ -25,14 +25,19 @@ let db: Database.Database | null = null
 
 function getDb(): Database.Database {
   if (!db) {
-    const dbPath = getDatabasePath()
-    db = new Database(dbPath)
-    
-    // Enable foreign keys
-    db.pragma('foreign_keys = ON')
-    
-    // Initialize tables if they don't exist
-    initializeTables(db)
+    try {
+      const dbPath = getDatabasePath()
+      db = new Database(dbPath)
+      
+      // Enable foreign keys
+      db.pragma('foreign_keys = ON')
+      
+      // Initialize tables if they don't exist
+      initializeTables(db)
+    } catch (error) {
+      console.error('Database connection error:', error)
+      throw new Error('Failed to connect to database. Please check database path and permissions.')
+    }
   }
   return db
 }

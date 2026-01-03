@@ -1,9 +1,17 @@
 /**
  * PDF Export utilities
  * Uses jsPDF to export tables to PDF
+ * Client-side only - should only be called from browser
  */
 
-import jsPDF from 'jspdf'
+// Dynamic import to avoid SSR issues
+const getJsPDF = async () => {
+  if (typeof window === 'undefined') {
+    throw new Error('PDF export is only available in the browser')
+  }
+  const { default: jsPDF } = await import('jspdf')
+  return jsPDF
+}
 
 interface Column {
   header: string
@@ -21,7 +29,7 @@ interface ExportTableToPDFOptions {
   userDepartment?: string
 }
 
-export function exportTableToPDF(options: ExportTableToPDFOptions): void {
+export async function exportTableToPDF(options: ExportTableToPDFOptions): Promise<void> {
   const {
     title,
     columns,
@@ -31,6 +39,16 @@ export function exportTableToPDF(options: ExportTableToPDFOptions): void {
     userName,
     userDepartment
   } = options
+
+  // Check if we're in browser
+  if (typeof window === 'undefined') {
+    console.error('PDF export is only available in the browser')
+    return
+  }
+
+  // Dynamic import to avoid SSR issues
+  const jsPDFModule = await getJsPDF()
+  const jsPDF = jsPDFModule.default || jsPDFModule
 
   // Create new PDF document
   const doc = new jsPDF({
