@@ -12,6 +12,7 @@ import { format } from "date-fns"
 import { checkDirectAccess } from "@/lib/navigation-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { AuthGuard } from "@/components/auth-guard"
+import { FaceScanner } from "@/components/face-scanner"
 
 export default function ClockPage() {
   const router = useRouter()
@@ -19,6 +20,8 @@ export default function ClockPage() {
   const [attendance, setAttendance] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [showFaceScanner, setShowFaceScanner] = useState(false)
+  const [faceScanMode, setFaceScanMode] = useState<'clockIn' | 'clockOut'>('clockIn')
 
   useEffect(() => {
     checkDirectAccess(router)
@@ -49,57 +52,49 @@ export default function ClockPage() {
     }
   }
 
-  const handleClockIn = async () => {
-    if (!user) return
-    setLoading(true)
-    try {
-      const response = await fetch('/api/attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.email,
-          action: 'clockIn'
-        })
-      })
-      const data = await response.json()
-      if (data.success) {
-        toast.success('Clocked in successfully!')
-        fetchTodayAttendance(user.email)
-      } else {
-        toast.error(data.error || 'Failed to clock in')
-      }
-    } catch (error) {
-      toast.error('Error clocking in')
-    } finally {
-      setLoading(false)
-    }
+  const handleClockInClick = () => {
+    setFaceScanMode('clockIn')
+    setShowFaceScanner(true)
   }
 
-  const handleClockOut = async () => {
+  const handleClockOutClick = () => {
+    setFaceScanMode('clockOut')
+    setShowFaceScanner(true)
+  }
+
+  const handleFaceDetected = async () => {
     if (!user) return
     setLoading(true)
     try {
+      const action = faceScanMode === 'clockIn' ? 'clockIn' : 'clockOut'
       const response = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.email,
-          action: 'clockOut',
+          action: action,
           recordId: attendance?.id
         })
       })
       const data = await response.json()
       if (data.success) {
-        toast.success('Clocked out successfully!')
+        toast.success(`${faceScanMode === 'clockIn' ? 'Clocked in' : 'Clocked out'} successfully!`)
+        setShowFaceScanner(false)
         fetchTodayAttendance(user.email)
       } else {
-        toast.error(data.error || 'Failed to clock out')
+        toast.error(data.error || `Failed to ${faceScanMode}`)
+        setShowFaceScanner(false)
       }
     } catch (error) {
-      toast.error('Error clocking out')
+      toast.error(`Error during ${faceScanMode}`)
+      setShowFaceScanner(false)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCancelFaceScan = () => {
+    setShowFaceScanner(false)
   }
 
   const calculateHours = () => {
@@ -114,10 +109,20 @@ export default function ClockPage() {
     <AuthGuard>
       <DashboardLayout>
         <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Clock In/Out</h1>
-            <p className="text-muted-foreground mt-2">Record your attendance</p>
-          </div>
+          {showFaceScanner && (
+            <FaceScanner
+              mode={faceScanMode}
+              onFaceDetected={handleFaceDetected}
+              onCancel={handleCancelFaceScan}
+            />
+          )}
+          
+          {!showFaceScanner && (
+            <>
+              <div>
+                <h1 className="text-3xl font-bold">Clock In/Out</h1>
+                <p className="text-muted-foreground mt-2">Record your attendance</p>
+              </div>
 
           {/* Current Time Display */}
           <Card>
@@ -156,7 +161,7 @@ export default function ClockPage() {
                   </div>
                 ) : (
                   <Button 
-                    onClick={handleClockIn} 
+                    onClick={handleClockInClick} 
                     disabled={loading}
                     className="w-full"
                     size="lg"
@@ -185,7 +190,7 @@ export default function ClockPage() {
                   </div>
                 ) : (
                   <Button 
-                    onClick={handleClockOut} 
+                    onClick={handleClockOutClick} 
                     disabled={loading || !attendance?.clockIn}
                     className="w-full"
                     size="lg"
@@ -227,6 +232,8 @@ export default function ClockPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+            </>
           )}
         </div>
       </DashboardLayout>

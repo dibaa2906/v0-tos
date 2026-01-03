@@ -23,21 +23,12 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: Clock, label: "Clock In/Out", href: "/dashboard/clock" },
-  { icon: History, label: "Attendance History", href: "/dashboard/attendance" },
-  { icon: Calendar, label: "Leave Application", href: "/dashboard/leave" },
   { icon: VolumeLogsIcon, label: "Volume Logs", href: "/dashboard/logs" },
-  { 
-    icon: DollarSign, 
-    label: "Budget", 
-    submenu: [
-      { icon: Plus, label: "Add Budget", href: "/budget/add" },
-      { icon: List, label: "Budget List", href: "/budget/list" }
-    ]
-  },
-  { icon: Users, label: "Users", href: "/dashboard/users" },
-  { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },
-  { icon: FileText, label: "Reports", href: "/dashboard/reports" },
-  { icon: Settings, label: "Settings", href: "/dashboard/settings" },
+  { icon: History, label: "Attendance History", href: "/dashboard/attendance" },
+  { icon: Calendar, label: "Leave Applications", href: "/dashboard/leave" },
+  { icon: FileText, label: "Regulations", href: "/dashboard/regulations" },
+  { icon: Users, label: "Staff Directory", href: "/dashboard/staff-directory" },
+  { icon: Settings, label: "Profile", href: "/dashboard/profile" },
 ]
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
@@ -75,7 +66,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
                 <div className="w-4 h-4 bg-sidebar-primary-foreground rounded-sm"></div>
               </div>
-              <span className="text-lg font-semibold text-sidebar-foreground">Intern Attendance</span>
+              <span className="text-lg font-semibold text-sidebar-foreground">Intern System</span>
             </div>
           )}
           <Button
