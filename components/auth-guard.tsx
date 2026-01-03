@@ -48,3 +48,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   return <>{children}</>
 }
+
+// AdminGuard - same as AuthGuard for now
+export function AdminGuard({ children }: AuthGuardProps) {
+  return <AuthGuard>{children}</AuthGuard>
+}

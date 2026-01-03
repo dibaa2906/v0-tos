@@ -25,3 +25,13 @@ export function logout(): void {
   localStorage.removeItem("isAuthenticated")
   localStorage.removeItem("userEmail")
 }
+
+// Departments list
+export const DEPARTMENTS = [
+  'Administration',
+  'Finance',
+  'Operation',
+  'Safety And Security',
+  'Technical And Maintenance',
+  'General Manager Office'
+] as const
