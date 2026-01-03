@@ -61,6 +61,55 @@ function initializeTables(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_volume_logs_user_date 
     ON volume_logs(userId, date)
   `)
+
+  // Create attendance_records table (clock-in/out)
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS attendance_records (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      clockIn TEXT,
+      clockOut TEXT,
+      breakStart TEXT,
+      breakEnd TEXT,
+      totalHours REAL,
+      status TEXT DEFAULT 'present',
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  `)
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_attendance_user_date 
+    ON attendance_records(userId, date)
+  `)
+
+  // Create leave_applications table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS leave_applications (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      leaveType TEXT NOT NULL,
+      startDate TEXT NOT NULL,
+      endDate TEXT NOT NULL,
+      days REAL NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      approvedBy TEXT,
+      approvedAt TEXT,
+      rejectionReason TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  `)
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_leave_user_date 
+    ON leave_applications(userId, startDate)
+  `)
 }
 
 // Volume Log Functions
@@ -179,6 +228,181 @@ export function getUserByEmail(email: string): User | null {
   } catch (error) {
     console.error('Error getting user by email:', error)
     return null
+  }
+}
+
+// Attendance Functions
+
+export interface AttendanceRecord {
+  id: string
+  userId: string
+  date: string
+  clockIn?: string
+  clockOut?: string
+  breakStart?: string
+  breakEnd?: string
+  totalHours?: number
+  status?: string
+  notes?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export function getAttendanceByUserAndDate(userId: string, date: string): AttendanceRecord | null {
+  try {
+    const database = getDb()
+    const stmt = database.prepare('SELECT * FROM attendance_records WHERE userId = ? AND date = ?')
+    const result = stmt.get(userId, date) as AttendanceRecord | undefined
+    return result || null
+  } catch (error) {
+    console.error('Error getting attendance record:', error)
+    return null
+  }
+}
+
+export function getAttendanceHistoryByUser(userId: string, limit?: number): AttendanceRecord[] {
+  try {
+    const database = getDb()
+    const query = limit 
+      ? `SELECT * FROM attendance_records WHERE userId = ? ORDER BY date DESC LIMIT ?`
+      : `SELECT * FROM attendance_records WHERE userId = ? ORDER BY date DESC`
+    const stmt = database.prepare(query)
+    const results = limit 
+      ? stmt.all(userId, limit) as AttendanceRecord[]
+      : stmt.all(userId) as AttendanceRecord[]
+    return results || []
+  } catch (error) {
+    console.error('Error getting attendance history:', error)
+    return []
+  }
+}
+
+export function createAttendanceRecord(record: AttendanceRecord): void {
+  try {
+    const database = getDb()
+    const stmt = database.prepare(`
+      INSERT INTO attendance_records (id, userId, date, clockIn, clockOut, breakStart, breakEnd, totalHours, status, notes, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `)
+    stmt.run(
+      record.id,
+      record.userId,
+      record.date,
+      record.clockIn || null,
+      record.clockOut || null,
+      record.breakStart || null,
+      record.breakEnd || null,
+      record.totalHours || null,
+      record.status || 'present',
+      record.notes || null
+    )
+  } catch (error) {
+    console.error('Error creating attendance record:', error)
+    throw error
+  }
+}
+
+export function updateAttendanceRecord(recordId: string, updates: Partial<AttendanceRecord>): void {
+  try {
+    const database = getDb()
+    const fields: string[] = []
+    const values: any[] = []
+
+    if (updates.clockIn !== undefined) { fields.push('clockIn = ?'); values.push(updates.clockIn) }
+    if (updates.clockOut !== undefined) { fields.push('clockOut = ?'); values.push(updates.clockOut) }
+    if (updates.breakStart !== undefined) { fields.push('breakStart = ?'); values.push(updates.breakStart) }
+    if (updates.breakEnd !== undefined) { fields.push('breakEnd = ?'); values.push(updates.breakEnd) }
+    if (updates.totalHours !== undefined) { fields.push('totalHours = ?'); values.push(updates.totalHours) }
+    if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status) }
+    if (updates.notes !== undefined) { fields.push('notes = ?'); values.push(updates.notes) }
+
+    fields.push('updatedAt = datetime(\'now\')')
+    values.push(recordId)
+
+    const stmt = database.prepare(`UPDATE attendance_records SET ${fields.join(', ')} WHERE id = ?`)
+    stmt.run(...values)
+  } catch (error) {
+    console.error('Error updating attendance record:', error)
+    throw error
+  }
+}
+
+// Leave Application Functions
+
+export interface LeaveApplication {
+  id: string
+  userId: string
+  leaveType: string
+  startDate: string
+  endDate: string
+  days: number
+  reason: string
+  status: string
+  approvedBy?: string
+  approvedAt?: string
+  rejectionReason?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export function createLeaveApplication(application: LeaveApplication): void {
+  try {
+    const database = getDb()
+    const stmt = database.prepare(`
+      INSERT INTO leave_applications (id, userId, leaveType, startDate, endDate, days, reason, status, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `)
+    stmt.run(
+      application.id,
+      application.userId,
+      application.leaveType,
+      application.startDate,
+      application.endDate,
+      application.days,
+      application.reason,
+      application.status || 'pending'
+    )
+  } catch (error) {
+    console.error('Error creating leave application:', error)
+    throw error
+  }
+}
+
+export function getLeaveApplicationsByUser(userId: string): LeaveApplication[] {
+  try {
+    const database = getDb()
+    const stmt = database.prepare('SELECT * FROM leave_applications WHERE userId = ? ORDER BY createdAt DESC')
+    const results = stmt.all(userId) as LeaveApplication[]
+    return results || []
+  } catch (error) {
+    console.error('Error getting leave applications:', error)
+    return []
+  }
+}
+
+export function updateLeaveApplicationStatus(
+  applicationId: string,
+  status: string,
+  approvedBy?: string,
+  rejectionReason?: string
+): void {
+  try {
+    const database = getDb()
+    const stmt = database.prepare(`
+      UPDATE leave_applications 
+      SET status = ?, approvedBy = ?, approvedAt = ?, rejectionReason = ?, updatedAt = datetime('now')
+      WHERE id = ?
+    `)
+    stmt.run(
+      status,
+      approvedBy || null,
+      status === 'approved' ? new Date().toISOString() : null,
+      rejectionReason || null,
+      applicationId
+    )
+  } catch (error) {
+    console.error('Error updating leave application status:', error)
+    throw error
   }
 }
 

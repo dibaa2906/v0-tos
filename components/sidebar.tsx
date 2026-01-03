@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Users, Settings, BarChart3, FileText, LogOut, ChevronLeft, ChevronRight, DollarSign, ChevronDown, Plus, List } from "lucide-react"
+import { LayoutDashboard, Users, Settings, BarChart3, FileText, LogOut, ChevronLeft, ChevronRight, DollarSign, ChevronDown, Plus, List, Clock, History, Calendar, FileText as VolumeLogsIcon } from "lucide-react"
 import { logout } from "@/lib/auth"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
@@ -22,6 +22,10 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: Clock, label: "Clock In/Out", href: "/dashboard/clock" },
+  { icon: History, label: "Attendance History", href: "/dashboard/attendance" },
+  { icon: Calendar, label: "Leave Application", href: "/dashboard/leave" },
+  { icon: VolumeLogsIcon, label: "Volume Logs", href: "/dashboard/logs" },
   { 
     icon: DollarSign, 
     label: "Budget", 
