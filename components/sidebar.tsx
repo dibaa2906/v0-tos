@@ -71,7 +71,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
                 <div className="w-4 h-4 bg-sidebar-primary-foreground rounded-sm"></div>
               </div>
-              <span className="text-lg font-semibold text-sidebar-foreground">AdminHub</span>
+              <span className="text-lg font-semibold text-sidebar-foreground">Intern Attendance</span>
             </div>
           )}
           <Button
