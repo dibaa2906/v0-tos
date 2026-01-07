@@ -42,8 +42,8 @@ export default function VolumeLogsPage() {
     // Check for direct URL access - redirect to homepage
     try {
       if (checkDirectAccess()) {
-        console.log('[VolumeLogsPage] Direct access detected, redirecting to login')
-        router.replace('/login')
+        console.log('[VolumeLogsPage] Direct access detected, redirecting to homepage')
+        router.replace('/')
         return
       }
     } catch (error) {
@@ -225,24 +225,25 @@ export default function VolumeLogsPage() {
       const result = await response.json()
 
       if (response.ok && result.success) {
-        const today = new Date().toISOString().split('T')[0]
-        const todayResponse = await fetch(`/api/logs?userId=${user.id}&date=${today}`)
-        const todayData = await todayResponse.json()
+        // Clear the form after successful save - keep it blank
+        setContent("")
         
-        if (todayData.success && todayData.log) {
-          setTodayLog(todayData.log)
-          setContent(todayData.log.content || "")
-        }
-        
-        // Refresh all logs to show the saved log in the table
+        // Refresh all logs to show the saved log in the table below
         const logsResponse = await fetch(`/api/logs?userId=${user.id}`)
         const logsData = await logsResponse.json()
         
         if (logsData.success && logsData.logs) {
           setAllLogs(logsData.logs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()))
+          
+          // Update todayLog state but don't populate the form
+          const today = new Date().toISOString().split('T')[0]
+          const todayLogEntry = logsData.logs.find((log: any) => log.date === today)
+          if (todayLogEntry) {
+            setTodayLog(todayLogEntry)
+          }
         }
         
-        toast.success("Volume log saved successfully!")
+        toast.success("Volume log saved successfully! You can edit it in the table below.")
       } else {
         toast.error(result.error || "Failed to save volume log")
       }

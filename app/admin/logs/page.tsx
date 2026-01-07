@@ -18,10 +18,7 @@ function LogsTable() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
-    }
+    getCurrentUser().then(user => setCurrentUser(user)).catch(console.error);
   }, []);
 
   useEffect(() => { 
@@ -48,8 +45,8 @@ function LogsTable() {
     // Filter by search
     if (search) {
       result = result.filter(l =>
-        l.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-        l.content?.toLowerCase().includes(search.toLowerCase()) ||
+      l.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+      l.content?.toLowerCase().includes(search.toLowerCase()) ||
         l.date?.includes(search)
       );
     }
@@ -64,10 +61,10 @@ function LogsTable() {
     return null
   }
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = () => {
     const filterText = getFilterText()
     
-    await exportTableToPDF({
+    exportTableToPDF({
       title: 'All Volume Logs',
       filterText: filterText || undefined,
       columns: [
@@ -125,13 +122,65 @@ function LogsTable() {
             <h1 className="text-xl font-bold text-turquoise-900">All Volume Logs</h1>
             <p className="text-xs text-gray-500 mt-1">Showing all volume logs from all interns</p>
           </div>
-          <div className="flex gap-1.5">
-            <Button onClick={handleExportPDF} variant="outline" size="sm" className="border-turquoise-300 text-turquoise-700 hover:bg-turquoise-50 h-8 text-xs">
-              <Download className="h-3 w-3 mr-1" />
+          <div className="flex gap-2">
+            <Button onClick={handleExportPDF} variant="outline" size="sm" className="h-8 text-xs">
+              <Download className="h-4 w-4 mr-2" />
               PDF
             </Button>
-            <Button onClick={() => window.print()} variant="outline" size="sm" className="border-turquoise-300 text-turquoise-700 hover:bg-turquoise-50 h-8 text-xs">
-              <Printer className="h-3 w-3 mr-1" />
+            <Button onClick={() => {
+              const printWindow = window.open('', '_blank')
+              if (!printWindow) return
+              
+              const tableRows = filtered.map(row => {
+                const content = (row.content || '').split('\n').filter((line: string) => line.trim()).map((line: string) => `- ${line.trim()}`).join('<br>')
+                const date = row.date ? new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/') : '-'
+                return `
+                  <tr>
+                    <td>${row.fullName || '-'}</td>
+                    <td>${row.department || '-'}</td>
+                    <td>${date}</td>
+                    <td>${content || '-'}</td>
+                  </tr>
+                `
+              }).join('')
+              
+              printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <title>All Volume Logs</title>
+                    <style>
+                      body { font-family: Arial, sans-serif; padding: 20px; }
+                      h1 { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+                      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                      th { background-color: #f3f4f6; border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: bold; font-size: 11px; }
+                      td { border: 1px solid #d1d5db; padding: 8px; font-size: 11px; }
+                      tr:nth-child(even) { background-color: #f9fafb; }
+                    </style>
+                  </head>
+                  <body>
+                    <h1>All Volume Logs</h1>
+                    <p>Showing all volume logs from all interns</p>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Intern</th>
+                          <th>Department</th>
+                          <th>Date</th>
+                          <th>Log Content</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${tableRows}
+                      </tbody>
+                    </table>
+                  </body>
+                </html>
+              `)
+              printWindow.document.close()
+              setTimeout(() => printWindow.print(), 250)
+            }} variant="outline" size="sm" className="h-8 text-xs">
+              <Printer className="h-4 w-4 mr-2" />
               Print
             </Button>
           </div>
@@ -162,7 +211,7 @@ function LogsTable() {
                 ))}
               </select>
             </div>
-          </div>
+      </div>
         </CardContent>
       </Card>
 
@@ -175,15 +224,15 @@ function LogsTable() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
-                <thead>
+          <thead>
                   <tr className="bg-turquoise-50 border-b border-turquoise-200">
                     <th className="text-left p-2 font-semibold text-xs text-turquoise-900">Intern</th>
                     <th className="text-left p-2 font-semibold text-xs text-turquoise-900">Department</th>
                     <th className="text-left p-2 font-semibold text-xs text-turquoise-900">Date</th>
                     <th className="text-left p-2 font-semibold text-xs text-turquoise-900">Log Content</th>
-                  </tr>
-                </thead>
-                <tbody>
+            </tr>
+          </thead>
+          <tbody>
                   {filtered.map((row, i) => {
                     const formatContent = (text: string) => {
                       if (!text) return '-'
@@ -205,13 +254,13 @@ function LogsTable() {
                       <tr key={i} className="border-b border-turquoise-100 hover:bg-turquoise-50">
                         <td className="p-2 text-sm font-medium">{row.fullName || '-'}</td>
                         <td className="p-2 text-xs text-gray-600">{row.department || '-'}</td>
-                        <td className="p-2 text-xs">{row.date || '-'}</td>
+                        <td className="p-2 text-xs">{row.date ? new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/') : '-'}</td>
                         <td className="p-2 text-xs">{formatContent(row.content || '')}</td>
-                      </tr>
+              </tr>
                     )
                   })}
-                </tbody>
-              </table>
+          </tbody>
+        </table>
             </div>
           )}
         </CardContent>

@@ -10,29 +10,16 @@ const nextConfig = {
     unoptimized: true,
   },
   webpack: (config, { isServer }) => {
-    // Ignore better-sqlite3 and Node.js modules during build
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'face-api.js': false,
-      'better-sqlite3': false,
-    };
-    
-    // Exclude better-sqlite3 and Node.js modules from client-side bundling
+    // Fix for face-api.js trying to use 'fs' in client-side code
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
-        net: false,
-        tls: false,
-        crypto: false,
         path: false,
-        os: false,
-      };
-      config.externals = config.externals || [];
-      config.externals.push('better-sqlite3');
+        crypto: false,
+      }
     }
-    
-    return config;
+    return config
   },
 }
 

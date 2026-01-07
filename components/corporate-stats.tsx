@@ -1,28 +1,28 @@
 export function CorporateStats() {
   const stats = [
     {
-      value: "24/7",
-      label: "Access",
-      description: "to your attendance records.",
-      company: "Available Anytime",
+      value: "20 days",
+      label: "saved",
+      description: "on daily builds.",
+      company: "NETFLIX",
     },
     {
-      value: "Real-time",
-      label: "Tracking",
-      description: "clock in/out instantly.",
-      company: "Live Updates",
+      value: "98%",
+      label: "faster",
+      description: "time to market.",
+      company: "TripAdvisor",
     },
     {
-      value: "Easy",
-      label: "Leave",
-      description: "application submission.",
-      company: "Quick Process",
+      value: "300%",
+      label: "increase",
+      description: "in SEO.",
+      company: "box",
     },
     {
-      value: "Complete",
-      label: "History",
-      description: "of all your records.",
-      company: "Full Transparency",
+      value: "6x",
+      label: "faster",
+      description: "to build + deploy.",
+      company: "ebay",
     },
   ]
 

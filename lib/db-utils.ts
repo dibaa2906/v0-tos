@@ -1,416 +1,380 @@
-/**
- * Database utility functions
- * Handles volume logs and user queries
- */
+import db from './db'
 
-import Database from 'better-sqlite3'
-import path from 'path'
-import fs from 'fs'
+// User operations
+export function getUserByUsername(username: string) {
+  // Optimized query - use index on username for faster lookups
+  // Case-insensitive comparison using COLLATE NOCASE (faster than LOWER())
+  return db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username) as any
+}
 
-// Get database path from environment or use default
-const getDatabasePath = (): string => {
-  const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'attendance.db')
+export function getUserById(id: string) {
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any
+}
+
+export function getNextUserId(): string {
+  // Get the highest user ID as a number
+  const result = db.prepare('SELECT id FROM users ORDER BY CAST(id AS INTEGER) DESC LIMIT 1').get() as any
   
-  // Ensure data directory exists
-  const dataDir = path.dirname(dbPath)
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true })
+  if (!result) {
+    return '01' // First user
   }
   
-  return dbPath
+  // Get current ID as number and increment
+  const currentId = parseInt(result.id, 10)
+  const nextId = currentId + 1
+  
+  // Format with leading zero (01, 02, ... 09, 10, 11, etc.)
+  return nextId.toString().padStart(2, '0')
 }
 
-// Initialize database connection
-let db: Database.Database | null = null
+export function createUser(user: any) {
+  const stmt = db.prepare(`
+    INSERT INTO users (id, fullName, username, email, address, department, emergencyContactName, emergencyContactPhone, phoneNumber, isPhoneVerified, password, profilePhoto, isAdmin, institution, lecturerContactName, lecturerContactPhone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  return stmt.run(
+    user.id,
+    user.fullName,
+    user.username,
+    user.email,
+    user.address,
+    user.department,
+    user.emergencyContactName,
+    user.emergencyContactPhone,
+    user.phoneNumber || user.emergencyContactPhone || '', // Use phoneNumber if provided, fallback to emergencyContactPhone
+    user.isPhoneVerified ? 1 : 0,
+    user.password,
+    user.profilePhoto || null,
+    user.isAdmin ? 1 : 0,
+    user.institution || null,
+    user.lecturerContactName || null,
+    user.lecturerContactPhone || null
+  )
+}
 
-function getDb(): Database.Database {
-  if (!db) {
-    try {
-      const dbPath = getDatabasePath()
-      db = new Database(dbPath)
-      
-      // Enable foreign keys
-      db.pragma('foreign_keys = ON')
-      
-      // Initialize tables if they don't exist
-      initializeTables(db)
-    } catch (error) {
-      console.error('Database connection error:', error)
-      throw new Error('Failed to connect to database. Please check database path and permissions.')
-    }
+export function updateUser(id: string, updates: Partial<any>) {
+  const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ')
+  const values = Object.values(updates)
+  const stmt = db.prepare(`UPDATE users SET ${fields} WHERE id = ?`)
+  return stmt.run(...values, id)
+}
+
+// Attendance operations
+export function getAttendanceByUserAndDate(userId: string, date: string) {
+  return db.prepare('SELECT * FROM attendance WHERE userId = ? AND date = ?').get(userId, date) as any
+}
+
+export function getAttendanceByUser(userId: string) {
+  return db.prepare('SELECT * FROM attendance WHERE userId = ? ORDER BY date DESC').all(userId) as any[]
+}
+
+export function createAttendance(attendance: any) {
+  const stmt = db.prepare(`
+    INSERT INTO attendance (
+      id, userId, date, clockInTime, clockOutTime, clockInImage, clockOutImage,
+      clockInLatitude, clockInLongitude, clockOutLatitude, clockOutLongitude, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  return stmt.run(
+    attendance.id,
+    attendance.userId,
+    attendance.date,
+    attendance.clockInTime,
+    attendance.clockOutTime,
+    attendance.clockInImage,
+    attendance.clockOutImage,
+    attendance.clockInLatitude,
+    attendance.clockInLongitude,
+    attendance.clockOutLatitude,
+    attendance.clockOutLongitude,
+    attendance.status
+  )
+}
+
+export function updateAttendance(id: string, updates: Partial<any>) {
+  const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ')
+  const values = Object.values(updates)
+  const stmt = db.prepare(`UPDATE attendance SET ${fields} WHERE id = ?`)
+  return stmt.run(...values, id)
+}
+
+// Volume logs operations
+export function getVolumeLogByUserAndDate(userId: string, date: string) {
+  return db.prepare('SELECT * FROM volume_logs WHERE userId = ? AND date = ?').get(userId, date) as any
+}
+
+export function getVolumeLogsByUser(userId: string) {
+  return db.prepare('SELECT * FROM volume_logs WHERE userId = ? ORDER BY date DESC').all(userId) as any[]
+}
+
+export function getAllVolumeLogs() {
+  return db.prepare(`
+    SELECT 
+      vl.*,
+      u.fullName,
+      u.email,
+      u.department
+    FROM volume_logs vl
+    JOIN users u ON vl.userId = u.id
+    ORDER BY vl.date DESC
+  `).all() as any[]
+}
+
+export function createVolumeLog(log: any) {
+  // First verify the user exists
+  const user = getUserById(log.userId)
+  if (!user) {
+    throw new Error(`User with ID ${log.userId} not found`)
   }
-  return db
-}
-
-function initializeTables(database: Database.Database): void {
-  // Create volume_logs table if it doesn't exist
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS volume_logs (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      date TEXT NOT NULL,
-      content TEXT,
-      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    )
+  
+  const stmt = db.prepare(`
+    INSERT INTO volume_logs (id, userId, date, content)
+    VALUES (?, ?, ?, ?)
   `)
-
-  // Create index for faster queries
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_volume_logs_user_date 
-    ON volume_logs(userId, date)
-  `)
-
-  // Create attendance_records table (clock-in/out)
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS attendance_records (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      date TEXT NOT NULL,
-      clockIn TEXT,
-      clockOut TEXT,
-      breakStart TEXT,
-      breakEnd TEXT,
-      totalHours REAL,
-      status TEXT DEFAULT 'present',
-      notes TEXT,
-      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    )
-  `)
-
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_attendance_user_date 
-    ON attendance_records(userId, date)
-  `)
-
-  // Create leave_applications table
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS leave_applications (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      leaveType TEXT NOT NULL,
-      startDate TEXT NOT NULL,
-      endDate TEXT NOT NULL,
-      days REAL NOT NULL,
-      reason TEXT NOT NULL,
-      status TEXT DEFAULT 'pending',
-      approvedBy TEXT,
-      approvedAt TEXT,
-      rejectionReason TEXT,
-      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    )
-  `)
-
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_leave_user_date 
-    ON leave_applications(userId, startDate)
-  `)
-}
-
-// Volume Log Functions
-
-export interface VolumeLog {
-  id: string
-  userId: string
-  date: string
-  content: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-export function getVolumeLogByUserAndDate(userId: string, date: string): VolumeLog | null {
+  
   try {
-    const database = getDb()
-    const stmt = database.prepare('SELECT * FROM volume_logs WHERE userId = ? AND date = ?')
-    const result = stmt.get(userId, date) as VolumeLog | undefined
-    return result || null
-  } catch (error) {
-    console.error('Error getting volume log:', error)
-    return null
-  }
-}
-
-export function getVolumeLogsByUser(userId: string): VolumeLog[] {
-  try {
-    const database = getDb()
-    const stmt = database.prepare('SELECT * FROM volume_logs WHERE userId = ? ORDER BY date DESC')
-    const results = stmt.all(userId) as VolumeLog[]
-    return results || []
-  } catch (error) {
-    console.error('Error getting volume logs by user:', error)
-    return []
-  }
-}
-
-export function getAllVolumeLogs(): VolumeLog[] {
-  try {
-    const database = getDb()
-    const stmt = database.prepare(`
-      SELECT 
-        vl.*,
-        u.fullName,
-        u.department
-      FROM volume_logs vl
-      LEFT JOIN users u ON vl.userId = u.id
-      ORDER BY vl.date DESC
-    `)
-    const results = stmt.all() as any[]
-    return results || []
-  } catch (error) {
-    console.error('Error getting all volume logs:', error)
-    return []
-  }
-}
-
-export function createVolumeLog(log: VolumeLog): void {
-  try {
-    const database = getDb()
-    const stmt = database.prepare(`
-      INSERT INTO volume_logs (id, userId, date, content, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-    `)
-    stmt.run(log.id, log.userId, log.date, log.content || '')
-  } catch (error) {
-    console.error('Error creating volume log:', error)
+    return stmt.run(log.id, log.userId, log.date, log.content || '')
+  } catch (error: any) {
+    console.error(`Error creating volume log - UserId: ${log.userId}, User exists: ${!!user}, Error:`, error.message)
     throw error
   }
 }
 
-export function updateVolumeLog(logId: string, content: string): void {
-  try {
-    const database = getDb()
-    const stmt = database.prepare(`
-      UPDATE volume_logs 
-      SET content = ?, updatedAt = datetime('now')
-      WHERE id = ?
-    `)
-    stmt.run(content, logId)
-  } catch (error) {
-    console.error('Error updating volume log:', error)
-    throw error
+export function updateVolumeLog(id: string, content: string) {
+  return db.prepare('UPDATE volume_logs SET content = ? WHERE id = ?').run(content, id)
+}
+
+// Leave applications operations
+export function getLeaveApplicationsByUser(userId: string) {
+  return db.prepare('SELECT * FROM leave_applications WHERE userId = ? ORDER BY appliedAt DESC').all(userId) as any[]
+}
+
+export function createLeaveApplication(application: any) {
+  const stmt = db.prepare(`
+    INSERT INTO leave_applications (
+      id, userId, startDate, endDate, reason, status, leaveType, mcFile, appliedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  return stmt.run(
+    application.id,
+    application.userId,
+    application.startDate,
+    application.endDate,
+    application.reason,
+    application.status || 'pending',
+    application.leaveType || 'regular',
+    application.mcFile || null,
+    application.appliedAt || new Date().toISOString()
+  )
+}
+
+// Get supervisor by department
+export function getSupervisorByDepartment(department: string) {
+  const supervisorMap: Record<string, string> = {
+    'Pentadbiran': 'shap.hashim',
+    'Kewangan': 'azmarina.aziz',
+    'Unit Teknologi Maklumat': 'nasarudin.roslan',
+    'Teknikal dan Penyelenggaraan': 'anuar.mansor',
+    'Keselamatan dan Kesihatan': 'shamsul.shaari',
+    'Operasi': 'engku.zamrin'
   }
+  
+  const supervisorUsername = supervisorMap[department]
+  if (!supervisorUsername) return null
+  
+  return getUserByUsername(supervisorUsername)
 }
 
-// User Functions
-
-export interface User {
-  id: string
-  fullName?: string
-  username?: string
-  email?: string
-  department?: string
-  [key: string]: any
-}
-
-export function getUserById(userId: string): User | null {
-  try {
-    const database = getDb()
-    const stmt = database.prepare('SELECT * FROM users WHERE id = ?')
-    const result = stmt.get(userId) as User | undefined
-    return result || null
-  } catch (error) {
-    console.error('Error getting user by ID:', error)
-    return null
-  }
-}
-
-export function getUserByEmail(email: string): User | null {
-  try {
-    const database = getDb()
-    const stmt = database.prepare('SELECT * FROM users WHERE email = ?')
-    const result = stmt.get(email) as User | undefined
-    return result || null
-  } catch (error) {
-    console.error('Error getting user by email:', error)
-    return null
-  }
-}
-
-// Attendance Functions
-
-export interface AttendanceRecord {
-  id: string
-  userId: string
-  date: string
-  clockIn?: string
-  clockOut?: string
-  breakStart?: string
-  breakEnd?: string
-  totalHours?: number
+// Get all leave applications with filters
+export function getLeaveApplications(filters: {
+  userId?: string
   status?: string
-  notes?: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-export function getAttendanceByUserAndDate(userId: string, date: string): AttendanceRecord | null {
-  try {
-    const database = getDb()
-    const stmt = database.prepare('SELECT * FROM attendance_records WHERE userId = ? AND date = ?')
-    const result = stmt.get(userId, date) as AttendanceRecord | undefined
-    return result || null
-  } catch (error) {
-    console.error('Error getting attendance record:', error)
-    return null
+  approverDept?: string
+  approverType?: string
+} = {}) {
+  let query = 'SELECT la.*, u.fullName, u.department, u.email FROM leave_applications la JOIN users u ON la.userId = u.id WHERE 1=1'
+  const params: any[] = []
+  
+  if (filters.userId) {
+    query += ' AND la.userId = ?'
+    params.push(filters.userId)
   }
-}
-
-export function getAttendanceHistoryByUser(userId: string, limit?: number): AttendanceRecord[] {
-  try {
-    const database = getDb()
-    const query = limit 
-      ? `SELECT * FROM attendance_records WHERE userId = ? ORDER BY date DESC LIMIT ?`
-      : `SELECT * FROM attendance_records WHERE userId = ? ORDER BY date DESC`
-    const stmt = database.prepare(query)
-    const results = limit 
-      ? stmt.all(userId, limit) as AttendanceRecord[]
-      : stmt.all(userId) as AttendanceRecord[]
-    return results || []
-  } catch (error) {
-    console.error('Error getting attendance history:', error)
-    return []
+  
+  if (filters.status) {
+    query += ' AND la.status = ?'
+    params.push(filters.status)
   }
+  
+  if (filters.approverDept && filters.approverType === 'supervisor') {
+    // For supervisor review, show leaves from their department that are pending
+    query += ' AND u.department = ? AND la.status = ?'
+    params.push(filters.approverDept, 'pending')
+  }
+  
+  query += ' ORDER BY la.appliedAt DESC'
+  
+  return db.prepare(query).all(...params) as any[]
 }
 
-export function createAttendanceRecord(record: AttendanceRecord): void {
+// Get leave application by ID
+export function getLeaveApplicationById(id: string) {
+  return db.prepare(`
+    SELECT la.*, u.fullName, u.department, u.email 
+    FROM leave_applications la 
+    JOIN users u ON la.userId = u.id 
+    WHERE la.id = ?
+  `).get(id) as any
+}
+
+export function updateLeaveApplication(id: string, updates: Partial<any>) {
+  const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ')
+  const values = Object.values(updates)
+  const stmt = db.prepare(`UPDATE leave_applications SET ${fields} WHERE id = ?`)
+  return stmt.run(...values, id)
+}
+
+export function deleteLeaveApplication(id: string) {
+  console.log('🗑️ deleteLeaveApplication called with ID:', id)
+  // Use parameterized query to ensure exact ID match
+  const stmt = db.prepare('DELETE FROM leave_applications WHERE id = ?')
+  const result = stmt.run(id)
+  console.log('🗑️ Delete result:', { changes: result.changes, lastInsertRowid: result.lastInsertRowid })
+  return result
+}
+
+// Verification code operations
+export function saveVerificationCode(email: string, code: string, expiresInMinutes: number = 10) {
   try {
-    const database = getDb()
-    const stmt = database.prepare(`
-      INSERT INTO attendance_records (id, userId, date, clockIn, clockOut, breakStart, breakEnd, totalHours, status, notes, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `)
-    stmt.run(
-      record.id,
-      record.userId,
-      record.date,
-      record.clockIn || null,
-      record.clockOut || null,
-      record.breakStart || null,
-      record.breakEnd || null,
-      record.totalHours || null,
-      record.status || 'present',
-      record.notes || null
-    )
-  } catch (error) {
-    console.error('Error creating attendance record:', error)
+    // Check if table exists and what schema it has
+    const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='verification_codes'").get() as any
+    
+    if (!tableInfo) {
+      // Table doesn't exist, create it with the new schema
+      db.exec(`
+        CREATE TABLE verification_codes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT NOT NULL,
+          code TEXT NOT NULL,
+          expiresAt DATETIME NOT NULL,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE INDEX idx_verification_email ON verification_codes(email);
+        CREATE INDEX idx_verification_expires ON verification_codes(expiresAt);
+      `)
+    } else {
+      // Check if table has old schema (email as PRIMARY KEY or INTEGER timestamps)
+      const columns = db.prepare("PRAGMA table_info(verification_codes)").all() as any[]
+      const hasIdColumn = columns.some(col => col.name === 'id' && col.pk === 1)
+      const expiresAtCol = columns.find(col => col.name === 'expiresAt')
+      const hasDatetimeExpires = expiresAtCol && (
+        expiresAtCol.type.toUpperCase().includes('DATETIME') || 
+        expiresAtCol.type.toUpperCase() === 'TEXT'
+      )
+      
+      if (!hasIdColumn || !hasDatetimeExpires) {
+        // Migrate to new schema
+        console.log('🔄 Migrating verification_codes table to new schema...')
+        db.exec('DROP TABLE IF EXISTS verification_codes')
+        db.exec(`
+          CREATE TABLE verification_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            code TEXT NOT NULL,
+            expiresAt DATETIME NOT NULL,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+          
+          CREATE INDEX idx_verification_email ON verification_codes(email);
+          CREATE INDEX idx_verification_expires ON verification_codes(expiresAt);
+        `)
+      }
+    }
+    
+    // Clean up expired codes first
+    db.prepare("DELETE FROM verification_codes WHERE expiresAt < datetime('now')").run()
+    
+    // Delete any existing codes for this email
+    db.prepare('DELETE FROM verification_codes WHERE email = ?').run(email)
+    
+    // Insert new code
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
+    const stmt = db.prepare('INSERT INTO verification_codes (email, code, expiresAt) VALUES (?, ?, ?)')
+    return stmt.run(email, code, expiresAt)
+  } catch (error: any) {
+    console.error('❌ Error saving verification code:', error)
     throw error
   }
 }
 
-export function updateAttendanceRecord(recordId: string, updates: Partial<AttendanceRecord>): void {
+// Check if code exists without deleting it
+export function checkCode(email: string, code: string): boolean {
   try {
-    const database = getDb()
-    const fields: string[] = []
-    const values: any[] = []
-
-    if (updates.clockIn !== undefined) { fields.push('clockIn = ?'); values.push(updates.clockIn) }
-    if (updates.clockOut !== undefined) { fields.push('clockOut = ?'); values.push(updates.clockOut) }
-    if (updates.breakStart !== undefined) { fields.push('breakStart = ?'); values.push(updates.breakStart) }
-    if (updates.breakEnd !== undefined) { fields.push('breakEnd = ?'); values.push(updates.breakEnd) }
-    if (updates.totalHours !== undefined) { fields.push('totalHours = ?'); values.push(updates.totalHours) }
-    if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status) }
-    if (updates.notes !== undefined) { fields.push('notes = ?'); values.push(updates.notes) }
-
-    fields.push('updatedAt = datetime(\'now\')')
-    values.push(recordId)
-
-    const stmt = database.prepare(`UPDATE attendance_records SET ${fields.join(', ')} WHERE id = ?`)
-    stmt.run(...values)
-  } catch (error) {
-    console.error('Error updating attendance record:', error)
-    throw error
+    // Check if table exists
+    const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='verification_codes'").get() as any
+    
+    if (!tableInfo) {
+      return false
+    }
+    
+    // Clean up expired codes first
+    db.prepare("DELETE FROM verification_codes WHERE expiresAt < datetime('now')").run()
+    
+    // Check if code exists and is valid (without deleting)
+    const result = db.prepare(`
+      SELECT * FROM verification_codes 
+      WHERE email = ? AND code = ? AND expiresAt > datetime('now')
+      ORDER BY createdAt DESC
+      LIMIT 1
+    `).get(email, code) as any
+    
+    return !!result
+  } catch (error: any) {
+    console.error('Error checking code:', error)
+    return false
   }
 }
 
-// Leave Application Functions
-
-export interface LeaveApplication {
-  id: string
-  userId: string
-  leaveType: string
-  startDate: string
-  endDate: string
-  days: number
-  reason: string
-  status: string
-  approvedBy?: string
-  approvedAt?: string
-  rejectionReason?: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-export function createLeaveApplication(application: LeaveApplication): void {
+export function verifyCode(email: string, code: string, deleteAfterVerify: boolean = true): boolean {
   try {
-    const database = getDb()
-    const stmt = database.prepare(`
-      INSERT INTO leave_applications (id, userId, leaveType, startDate, endDate, days, reason, status, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `)
-    stmt.run(
-      application.id,
-      application.userId,
-      application.leaveType,
-      application.startDate,
-      application.endDate,
-      application.days,
-      application.reason,
-      application.status || 'pending'
-    )
-  } catch (error) {
-    console.error('Error creating leave application:', error)
-    throw error
+    // Check if table exists
+    const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='verification_codes'").get() as any
+    
+    if (!tableInfo) {
+      return false
+    }
+    
+    // Clean up expired codes first
+    db.prepare("DELETE FROM verification_codes WHERE expiresAt < datetime('now')").run()
+    
+    // Check if code exists and is valid
+    const result = db.prepare(`
+      SELECT * FROM verification_codes 
+      WHERE email = ? AND code = ? AND expiresAt > datetime('now')
+      ORDER BY createdAt DESC
+      LIMIT 1
+    `).get(email, code) as any
+    
+    if (result) {
+      // Delete the code after successful verification (if requested)
+      if (deleteAfterVerify) {
+        // Handle both old schema (email as PK) and new schema (id as PK)
+        if (result.id !== undefined) {
+          db.prepare('DELETE FROM verification_codes WHERE id = ?').run(result.id)
+        } else {
+          db.prepare('DELETE FROM verification_codes WHERE email = ?').run(email)
+        }
+      }
+      return true
+    }
+    
+    return false
+  } catch (error: any) {
+    console.error('Error verifying code:', error)
+    return false
   }
 }
 
-export function getLeaveApplicationsByUser(userId: string): LeaveApplication[] {
-  try {
-    const database = getDb()
-    const stmt = database.prepare('SELECT * FROM leave_applications WHERE userId = ? ORDER BY createdAt DESC')
-    const results = stmt.all(userId) as LeaveApplication[]
-    return results || []
-  } catch (error) {
-    console.error('Error getting leave applications:', error)
-    return []
-  }
+export function getUserByEmail(email: string) {
+  return db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE').get(email) as any
 }
-
-export function updateLeaveApplicationStatus(
-  applicationId: string,
-  status: string,
-  approvedBy?: string,
-  rejectionReason?: string
-): void {
-  try {
-    const database = getDb()
-    const stmt = database.prepare(`
-      UPDATE leave_applications 
-      SET status = ?, approvedBy = ?, approvedAt = ?, rejectionReason = ?, updatedAt = datetime('now')
-      WHERE id = ?
-    `)
-    stmt.run(
-      status,
-      approvedBy || null,
-      status === 'approved' ? new Date().toISOString() : null,
-      rejectionReason || null,
-      applicationId
-    )
-  } catch (error) {
-    console.error('Error updating leave application status:', error)
-    throw error
-  }
-}
-
-// Close database connection (for cleanup)
-export function closeDb(): void {
-  if (db) {
-    db.close()
-    db = null
-  }
-}
-
